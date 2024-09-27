@@ -7,7 +7,7 @@ phase="$2"
 
 # global vars
 COREOS_TMPLT=/opt/fcos-tmplt.yaml
-COREOS_FILES_PATH=/etc/pve/geco-pve/coreos
+COREOS_FILES_PATH=/etc/pve/next-pve/coreos
 YQ="/usr/local/bin/yq read --exitStatus --printMode v --stripComments --"
 
 # ==================================================================================================================================================================
@@ -30,7 +30,7 @@ setup_fcoreosct
 
 setup_yq()
 {
-        local VER=3.4.1
+        local VER=4.44.3
 
         [[ -x /usr/bin/wget ]]&& download_command="wget --quiet --show-progress --output-document"  || download_command="curl --location --output"
         [[ -x /usr/local/bin/yq ]]&& [[ "x$(/usr/local/bin/yq --version | awk '{print $NF}')" == "x${VER}" ]]&& return 0
@@ -66,12 +66,12 @@ then
 	}
 
 	echo -n "Fedora CoreOS: Generate yaml users block... "
-	echo -e "# This file is managed by Geco-iT hook-script. Do not edit.\n" > ${COREOS_FILES_PATH}/${vmid}.yaml
+	echo -e "# This file is managed by next-iT hook-script. Do not edit.\n" > ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo -e "variant: fcos\nversion: 1.1.0" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo -e "# user\npasswd:\n  users:" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	ciuser="$(qm cloudinit dump ${vmid} user 2> /dev/null | grep ^user: | awk '{print $NF}')"
 	echo "    - name: \"${ciuser:-admin}\"" >> ${COREOS_FILES_PATH}/${vmid}.yaml
-	echo "      gecos: \"Geco-iT CoreOS Administrator\"" >> ${COREOS_FILES_PATH}/${vmid}.yaml
+	echo "      nexts: \"next-iT CoreOS Administrator\"" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "      password_hash: '${cipasswd}'" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo '      groups: [ "sudo", "docker", "adm", "wheel", "systemd-journal" ]' >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo '      ssh_authorized_keys:' >> ${COREOS_FILES_PATH}/${vmid}.yaml

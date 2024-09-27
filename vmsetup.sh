@@ -12,17 +12,24 @@ export LC_ALL=C
 
 # template vm vars
 TEMPLATE_VMID="900"
-TEMPLATE_VMSTORAGE="local"
-SNIPPET_STORAGE="local"
+TEMPLATE_VMSTORAGE="hdd_data"
+SNIPPET_STORAGE="hdd_data"
 VMDISK_OPTIONS=",discard=on"
 
 TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
 
 # fcos version
+# URL to fetch the stable release JSON
+URL="https://builds.coreos.fedoraproject.org/streams/stable.json"
+# Fetch the JSON data and extract the stable release number using jq
+STABLE_RELEASE=$(curl -s $URL | jq -r '.architectures.x86_64.artifacts.qemu.release')
 STREAMS=stable
-VERSION=32.20201018.3.0
+VERSION=$STABLE_RELEASE
 PLATEFORM=qemu
 BASEURL=https://builds.coreos.fedoraproject.org
+
+
+
 
 # =============================================================================================
 # main()
