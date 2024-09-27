@@ -1,5 +1,5 @@
 # motd script
-    - path: /usr/local/bin/next-motd
+- path: /usr/local/bin/next-motd
       mode: 0755
       contents:
         inline: |
@@ -7,19 +7,19 @@
           
           OUT=/etc/console-login-helper-messages/motd.d/22_next.motd
           
-          echo -e "\nWelcome on a server powered by\n" > ${OUT}
+          printf "\nWelcome on a server powered by\n" > ${OUT}
           echo -e '\e[33m  _  _    __  ___           ___                  _ _' >> ${OUT}
           echo -e '\e[33m | \| |___\ \/ / |_   ___  / __| ___ __ _  _ _ _(_) |_ _  _' >> ${OUT}
           echo -e '\e[33m | .\` / -_)>  <|  _| |___| \__ \/ -_) _| || | '_| |  _| || |' >> ${OUT}
           echo -e '\e[33m |_|\_\___/_/\_\\__|       |___/\___\__|\_,_|_| |_|\__|\_, |' >> ${OUT}
           echo -e '\e[33m                                                       |__/\n\n' >> ${OUT}
-          eval "$(grep -E "^(NAME=|VARIANT=)" /etc/os-release)" && echo -e "\e[33mOperating System:\e[0m ${NAME} ${VARIANT}" >> ${OUT}
-          eval "$(grep ^OSTREE_VERSION /etc/os-release)" && echo -e "\e[33mVersion:\e[0m ${OSTREE_VERSION}" >> ${OUT}
-          echo -e "\e[33mKernel:\e[0m $(uname -r)" >> ${OUT}
+          NAME=$(grep '^NAME=' /etc/os-release | awk -F= '{print $2}' | tr -d '"')
+          VARIANT=$(grep '^VARIANT=' /etc/os-release | awk -F= '{print $2}' | tr -d '"')
+          echo -e "\e[33mOperating System:\e[0m ${NAME} ${VARIANT}" >> ${OUT}
           echo -ne "\e[33mCPU:\e[0m $(grep ^processor /proc/cpuinfo | wc -l)" >> ${OUT}
-          echo "$(grep "^model name" /proc/cpuinfo | head -n1 | awk -F: '{print $2}' | awk -F@ '{print $1}')" >> ${OUT}
-          echo -e "\e[33mRAM:\e[0m $(free | grep Mem | awk '{print $2}' | xargs -i expr {} / 1000 / 1000 | xargs -i printf '%.0fG\n' {})" >> ${OUT}
-          i=0; for disk in $(ls /dev/sd[a-z] /dev/vd[a-z] 2>/dev/null); do
+          echo "$(awk -F: '/^model name/ {print $2; exit}' /proc/cpuinfo | awk -F@ '{print $1}')" >> ${OUT}
+          echo -e "\e[33mRAM:\e[0m $(free | grep Mem | awk '{print $2}' | xargs -I {} expr {} / 1000 / 1000 | xargs -I {} printf '%.0fG\n' {})" >> ${OUT}
+          i=0; for disk in $(lsblk -d -o NAME | grep -E '^(sd|vd)[a-z]$'); do
                 lsblk > /dev/null 2>&1 || break
                 echo -e "\e[33mHDD${i} ($(basename ${disk})):\e[0m$(lsblk -n --nodeps ${disk} -o size)" >> ${OUT}
                 i=$((i+1))
@@ -99,11 +99,16 @@
 
             [[ -x /usr/bin/wget ]]&& download_command="wget --quiet --show-progress --output-document"  || download_command="curl -s --location --output"
             [[ -x /usr/local/bin/yq ]]&& [[ "x$(/usr/local/bin/yq --version | awk '{print $NF}')" == "x${VER}" ]]&& return 0
-            echo "Setup yaml parser tools yq..."
+            if command -v wget &> /dev/null; then
+              download_command="wget --quiet --show-progress --output-document"
+            else
+              download_command="curl -s --location --output"
+            fi
             rm -f /usr/local/bin/yq
             ${download_command} /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/${VER}/yq_linux_amd64
             chmod 755 /usr/local/bin/yq
-          }
+          # Converts a subnet mask to CIDR notation
+          mask2cdr()
           setup_yq
 
           # network
@@ -115,13 +120,16 @@
             x=${1%%$3*}
             echo $(( $2 + (${#x}/4) ))
           }
-
           cdr2mask()
           {
+            # Convert CIDR notation to subnet mask
             # Number of args to shift, 255..255, first non-255 byte, zeroes
             set -- $(( 5 - ($1 / 8) )) 255 255 255 255 $(( (255 << (8 - ($1 % 8))) & 255 )) 0 0 0
+            # Shift the arguments to get the correct subnet mask
             [[ $1 -gt 1 ]] && shift $1 || shift
+            # Print the subnet mask in dotted-decimal format
             echo ${1-0}.${2-0}.${3-0}.${4-0}
+          }
           }
 
           # ===================================================================================
@@ -187,7 +195,7 @@
             echo "[done]"
             # Network => ipv6: TODO
             netcards="$(${YQ} ${CIPATH}/network-config 'config[*].name' 2> /dev/null | wc -l)"
-            nameservers="$(${YQ} ${CIPATH}/network-config "config[${netcards}].address[*]" 2> /dev/null | paste -s -d ";" -)"
+            for (( i=0; i<${netcards}; i++ )); do
             searchdomain="$(${YQ} ${CIPATH}/network-config "config[${netcards}].search[*]" 2> /dev/null | paste -s -d ";" -)"
             echo "[INFO]: Cloudinit: DNS Server=$nameservers - DNS Search=$searchdomain"
             for (( i=O; i<${netcards}; i++ )); do
@@ -218,7 +226,7 @@
                   echo "[done]"
                 }
                 [[ "x${searchdomain}" != "x$(nmcli connection show net${i} 2> /dev/null | grep ^ipv4.dns-search: | awk '{print $2}' | tr ',' ';')" ]]&& {
-                  echo -n "[INFO]: Cloudinit: update Network config dns seach for net${i}... "
+                  echo -n "[INFO]: Cloudinit: update Network config dns search for net${i}... "
                   nmcli c modify net${i} ipv4.dns-search "$(echo ${searchdomain} | tr ";" ",")"
                   MUST_NET_RECONFIG=true
                   echo "[done]"
@@ -261,6 +269,32 @@
           exit 0 
 
 # next-issue
+- path: /etc/console-login-helper-messages/issue.d/00_next.issue
+      mode: 0644
+      contents:
+        inline: |
+
+          Welcome on a server powered by
+
+            _  _    __  ___           ___                  _ _        
+           | \| |___\ \/ / |_   ___  / __| ___ __ _  _ _ _(_) |_ _  _ 
+           | .` / -_)>  <|  _| |___| \__ \/ -_) _| || | '_| |  _| || |
+           |_|\_\___/_/\_\\__|       |___/\___\__|\_,_|_| |_|\__|\_, |
+                                                                 |__/ 
+            
+          .
+
+# kernel config
+- path: /etc/sysctl.d/20-silence-audit.conf
+  mode: 0644      
+  contents:
+    inline: |
+      # Raise console message logging level from DEBUG (7) to WARNING (4)
+      # to hide audit messages from the interactive console
+      kernel.printk=4
+
+
+# next-motd.service
     - path: /etc/console-login-helper-messages/issue.d/00_next.issue
       mode: 0644
       contents:
@@ -279,12 +313,11 @@
 # kernel config
     - path: /etc/sysctl.d/20-silence-audit.conf
       mode: 0644      
-      contents:
-        inline: |
+# next-cloudinit: apply cloudinit settings on boot
+- name: next-cloudinit.service
           # Raise console message logging level from DEBUG (7) to WARNING (4)
           # to hide audit messages from the interactive console
           kernel.printk=4
-
 
 # next-motd.service
 systemd:
@@ -324,29 +357,29 @@ systemd:
         WantedBy=multi-user.target
 
 # qemu-guest-agent
-    - name: setup-qemu-guest-agent.service
-      enabled: true
-      contents: |
-        [Unit]
-        Description=NeXt-Security Setup Qemu Guest Agent
-        After=network-online.target
-        Require=network-online.target
-        ConditionKernelCommandLine=ignition.platform.id=qemu
-        ConditionPathExists=!/var/lib/qemu-guest-agent.stamp
+- name: setup-qemu-guest-agent.service
+  enabled: true
+  contents: |
+    [Unit]
+    Description=NeXt-Security Setup Qemu Guest Agent
+    After=network-online.target
+    Require=network-online.target
+    ConditionKernelCommandLine=ignition.platform.id=qemu
+    ConditionPathExists=!/var/lib/qemu-guest-agent.stamp
 
-        [Service]
-        Type=oneshot
-        RemainAfterExit=yes
-        ExecStart=/bin/rpm-ostree install qemu-guest-agent
-        ExecStart=/bin/touch /var/lib/qemu-guest-agent.stamp
-        ExecStart=/bin/systemctl --no-block reboot
+    [Service]
+    Type=oneshot
+    RemainAfterExit=yes
+    ExecStart=/bin/rpm-ostree install qemu-guest-agent
+    ExecStart=/bin/touch /var/lib/qemu-guest-agent.stamp
+    ExecStart=/bin/systemctl --no-block reboot
 
-        [Install]
-        WantedBy=multi-user.target
+    [Install]
+    WantedBy=multi-user.target
 
 # fstrim
-    - name: fstrim.timer
-      enabled: true
+- name: fstrim.timer
+  enabled: true
  
     - name: fstrim.service
       dropins:
