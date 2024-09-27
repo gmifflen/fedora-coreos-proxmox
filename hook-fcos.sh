@@ -1,3 +1,30 @@
+# This script is a hook for Fedora CoreOS on Proxmox. It performs various setup tasks and generates necessary configuration files for Fedora CoreOS VMs.
+# 
+# Usage:
+#   ./hook-fcos.sh <vmid> <phase>
+#
+# Parameters:
+#   vmid  - The ID of the virtual machine.
+#   phase - The phase of the VM lifecycle (e.g., "pre-start").
+#
+# Global Variables:
+#   COREOS_TMPLT       - Path to the Fedora CoreOS template YAML file.
+#   COREOS_FILES_PATH  - Path to store generated CoreOS files.
+#   YQ                 - Command to read YAML files using yq.
+#
+# Functions:
+#   setup_fcoreosct()  - Sets up the Fedora CoreOS Config Transpiler (fcos-ct).
+#   setup_yq()         - Sets up the YAML parser tool yq.
+#
+# Main Logic:
+#   - If the phase is "pre-start", the script performs the following tasks:
+#     - Dumps cloud-init metadata and user data for the VM.
+#     - Checks if the cloud-init configuration has changed and regenerates necessary files if needed.
+#     - Generates YAML blocks for users, hostname, and network configuration.
+#     - Generates an Ignition config file using fcos-ct.
+#     - Saves the cloud-init instance ID.
+#     - Sets VM configuration arguments for Fedora CoreOS.
+#     - Restarts the VM if new Ignition settings are generated.
 #!/bin/bash
 
 # set -e is commented out to allow the script to continue even if some commands fail

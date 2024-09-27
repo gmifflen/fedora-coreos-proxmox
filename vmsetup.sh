@@ -1,3 +1,20 @@
+# This script sets up a Fedora CoreOS virtual machine template on Proxmox VE.
+# 
+# It performs the following steps:
+# 
+# 1. Sets global variables for VM configuration and Fedora CoreOS version.
+# 2. Checks if the specified VM storage and snippet storage exist in Proxmox VE.
+# 3. Ensures that the snippet storage has content snippets enabled.
+# 4. Copies the hook script and ignition config to the snippet storage.
+# 5. Determines the type of storage (file or block) for the VM.
+# 6. Downloads the Fedora CoreOS image if it does not already exist.
+# 7. Creates a new VM with the specified configuration.
+# 8. Sets the VM description with the Fedora CoreOS version and creation date.
+# 9. Configures the network interface for the VM.
+# 10. Creates a Cloud-init disk for the VM.
+# 11. Imports the Fedora CoreOS disk into the VM.
+# 12. Sets the hook script for the VM.
+# 13. Converts the VM into a Proxmox VE template.
 #!/bin/bash
 
 # Uncomment the following line to enable debug mode

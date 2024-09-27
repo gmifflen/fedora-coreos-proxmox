@@ -1,3 +1,40 @@
+# This YAML configuration file is used to set up various services and scripts on a Fedora CoreOS system.
+# It includes the following components:
+#
+# 1. MOTD Script:
+#    - Path: /usr/local/bin/next-motd
+#    - Mode: 0755
+#    - Description: Generates a custom message of the day (MOTD) with system information.
+#
+# 2. CloudInit Script:
+#    - Path: /usr/local/bin/next-cloudinit
+#    - Mode: 0755
+#    - Description: Applies basic CloudInit settings, including system preparation and network configuration.
+#
+# 3. Issue Message:
+#    - Path: /etc/console-login-helper-messages/issue.d/00_next.issue
+#    - Mode: 0644
+#    - Description: Displays a welcome message on the console login screen.
+#
+# 4. Kernel Configuration:
+#    - Path: /etc/sysctl.d/20-silence-audit.conf
+#    - Mode: 0644
+#    - Description: Raises console message logging level to hide audit messages from the interactive console.
+#
+# 5. Systemd Services:
+#    - next-motd.service:
+#      - Description: NeXt-Security MOTD service that runs the MOTD script.
+#      - Dependencies: Runs before console-login-helper-messages-motdgen.service and after network-online.target.
+#    - next-cloudinit.service:
+#      - Description: NeXt-Security CloudInit service that applies CloudInit settings on boot.
+#      - Dependencies: Wants network-online.target and runs after network.target and network-online.target.
+#    - setup-qemu-guest-agent.service:
+#      - Description: Sets up the QEMU Guest Agent if running on a QEMU platform.
+#      - Dependencies: Runs after network-online.target and requires network-online.target.
+#    - fstrim.timer:
+#      - Description: Enables periodic file system trimming.
+#    - fstrim.service:
+#      - Description: Overrides the default fstrim service to run with specific options.
 # motd script
 - path: /usr/local/bin/next-motd
       mode: 0755
