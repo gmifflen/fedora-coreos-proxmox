@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# set -e is commented out to allow the script to continue even if some commands fail
 #set -e
  
 vmid="$1"
@@ -19,8 +20,8 @@ setup_fcoreosct()
         local ARCH=x86_64
         local OS=unknown-linux-gnu # Linux
         local DOWNLOAD_URL=https://github.com/coreos/fcct/releases/download
- 
-        [[ -x /usr/local/bin/fcos-ct ]]&& [[ "x$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')" == "x${CT_VER}" ]]&& return 0
+		[[ -x /usr/local/bin/fcos-ct ]] && [[ "x$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')" == "x${CT_VER}" ]] && return 0
+		[[ -x /usr/local/bin/fcos-ct ]] && [[ "x$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')" == "x${CT_VER}" ]] && return 0
         echo "Setup Fedora CoreOS config transpiler..."
         rm -f /usr/local/bin/fcos-ct
         wget --quiet --show-progress ${DOWNLOAD_URL}/v${CT_VER}/fcct-${ARCH}-${OS} -O /usr/local/bin/fcos-ct
@@ -32,8 +33,8 @@ setup_yq()
 {
         local VER=4.44.3
 
-        [[ -x /usr/bin/wget ]]&& download_command="wget --quiet --show-progress --output-document"  || download_command="curl --location --output"
-        [[ -x /usr/local/bin/yq ]]&& [[ "x$(/usr/local/bin/yq --version | awk '{print $NF}')" == "x${VER}" ]]&& return 0
+		[[ -x /usr/bin/wget ]] && download_command="wget --quiet --show-progress --output-document" || download_command="curl --location --output"
+		[[ -x /usr/local/bin/yq ]] && [[ "x$(/usr/local/bin/yq --version | awk '{print $NF}')" == "x${VER}" ]] && return 0
         echo "Setup yaml parser tools yq..."
         rm -f /usr/local/bin/yq
         ${download_command} /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/${VER}/yq_linux_amd64
@@ -49,17 +50,17 @@ then
 	instance_id="$(qm cloudinit dump ${vmid} meta | ${YQ} - 'instance-id')"
 
 	# same cloudinit config ?
-	[[ -e ${COREOS_FILES_PATH}/${vmid}.id ]] && [[ "x${instance_id}" != "x$(cat ${COREOS_FILES_PATH}/${vmid}.id)" ]]&& {
+	[[ -e ${COREOS_FILES_PATH}/${vmid}.id ]] && [[ "x${instance_id}" != "x$(cat ${COREOS_FILES_PATH}/${vmid}.id)" ]] && {
 		rm -f ${COREOS_FILES_PATH}/${vmid}.ign # cloudinit config change
 	}
-	[[ -e ${COREOS_FILES_PATH}/${vmid}.ign ]]&& exit 0 # already done
+	[[ -e ${COREOS_FILES_PATH}/${vmid}.ign ]] && exit 0 # already done
 
 	mkdir -p ${COREOS_FILES_PATH} || exit 1
 		
 	# check config
 	cipasswd="$(qm cloudinit dump ${vmid} user | ${YQ} - 'password' 2> /dev/null)" || true # can be empty
-	[[ "x${cipasswd}" != "x" ]]&& VALIDCONFIG=true
-	${VALIDCONFIG:-false} || [[ "x$(qm cloudinit dump ${vmid} user | ${YQ} - 'ssh_authorized_keys[*]')" == "x" ]]|| VALIDCONFIG=true
+	[[ "x${cipasswd}" != "x" ]] && VALIDCONFIG=true
+	${VALIDCONFIG:-false} || [[ "x$(qm cloudinit dump ${vmid} user | ${YQ} - 'ssh_authorized_keys[*]')" == "x" ]] || VALIDCONFIG=true
 	${VALIDCONFIG:-false} || {
 		echo "Fedora CoreOS: you must set passwd or ssh-key before start VM${vmid}"
 		exit 1
@@ -87,6 +88,7 @@ then
 	echo "      overwrite: true" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "      contents:" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "        inline: |" >> ${COREOS_FILES_PATH}/${vmid}.yaml
+	# Convert hostname to lowercase using bash-specific feature
 	echo -e "          ${hostname,,}\n" >> ${COREOS_FILES_PATH}/${vmid}.yaml 
 	echo "[done]"
 	
@@ -94,7 +96,7 @@ then
 	netcards="$(qm cloudinit dump ${vmid} network | ${YQ} - 'config[*].name' 2> /dev/null | wc -l)"
 	nameservers="$(qm cloudinit dump ${vmid} network | ${YQ} - "config[${netcards}].address[*]" | paste -s -d ";" -)"
 	searchdomain="$(qm cloudinit dump ${vmid} network | ${YQ} - "config[${netcards}].search[*]" | paste -s -d ";" -)"
-	for (( i=O; i<${netcards}; i++ ))
+	for (( i=0; i<${netcards}; i++ ))
 	do
 		ipv4="" netmask="" gw="" macaddr="" # reset on each run
 		ipv4="$(qm cloudinit dump ${vmid} network | ${YQ} - config[${i}].subnets[0].address 2> /dev/null)" || continue # dhcp
@@ -145,7 +147,7 @@ then
 	# check vm config (no args on first boot)
 	qm config ${vmid} --current | grep -q ^args || {
 		echo -n "Set args com.coreos/config on VM${vmid}... "
-		rm -f /var/lock/qemu-server/lock-${vmid}.conf
+		pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /dev/null || {
 		pvesh set /nodes/$(hostname)/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /dev/null || {
 			echo "[failed]"
 			exit 1
@@ -154,7 +156,11 @@ then
 
 		# hack for reload new ignition file
 		echo -e "\nWARNING: New generated Fedora CoreOS ignition settings, we must restart vm..."
-		qm stop ${vmid} && sleep 2 && qm start ${vmid}&
+		qm stop ${vmid}
+		while qm status ${vmid} | grep -q "running"; do
+			sleep 1
+		done
+		qm start ${vmid}&
 		exit 1
 	}
 fi
