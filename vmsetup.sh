@@ -1,6 +1,7 @@
 #!/bin/bash
 
-#set -x # debug mode
+# Uncomment the following line to enable debug mode
+# set -x
 set -e
 
 # =============================================================================================
@@ -24,8 +25,8 @@ URL="https://builds.coreos.fedoraproject.org/streams/stable.json"
 # Fetch the JSON data and extract the stable release number using jq
 STABLE_RELEASE=$(curl -s $URL | jq -r '.architectures.x86_64.artifacts.qemu.release')
 STREAMS=stable
-VERSION=$STABLE_RELEASE
-PLATEFORM=qemu
+PLATFORM=qemu
+BASEURL=https://builds.coreos.fedoraproject.org
 BASEURL=https://builds.coreos.fedoraproject.org
 
 
@@ -52,7 +53,7 @@ echo "[ok]"
 
 # pve storage snippet enable
 pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader | grep -q snippets || {
-	echo "You musr activate content snippet on storage: ${SNIPPET_STORAGE}"
+        echo "You must activate content snippet on storage: ${SNIPPET_STORAGE}"
 	exit 1
 }
 
@@ -66,20 +67,20 @@ chmod 755 ${snippet_storage}/snippets/hook-fcos.sh
 # storage type ? (https://pve.proxmox.com/wiki/Storage)
 echo -n "Get storage \"${TEMPLATE_VMSTORAGE}\" type... "
 case "$(pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader | grep ^type | awk '{print $2}')" in
-        dir|nfs|cifs|glusterfs|cephfs) TEMPLATE_VMSTORAGE_type="file"; echo "[file]"; ;;
-        lvm|lvmthin|iscsi|iscsidirect|rbd|zfs|zfspool) TEMPLATE_VMSTORAGE_type="block"; echo "[block]" ;;
+        dir|nfs|cifs|glusterfs|cephfs) TEMPLATE_VMSTORAGE_type="file"; echo "[file]"; ;
+        lvm|lvmthin|iscsi|iscsidirect|rbd|zfs|zfspool) TEMPLATE_VMSTORAGE_type="block"; echo "[block]"; ;
         *)
                 echo "[unknown]"
                 exit 1
         ;;
 esac
 
-# download fcos vdisk
-[[ ! -e fedora-coreos-${VERSION}-${PLATEFORM}.x86_64.qcow2 ]]&& {
+[[ ! -e fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ]] && {
     echo "Download fedora coreos..."
     wget -q --show-progress \
-        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATEFORM}.x86_64.qcow2.xz
-    xz -dv fedora-coreos-${VERSION}-${PLATEFORM}.x86_64.qcow2.xz
+        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz
+    xz -dv fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz
+}
 }
 
 # create a new VM
@@ -96,13 +97,12 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
 			--boot c --bootdisk scsi0
 
 template_vmcreated=$(date +%Y-%m-%d)
-qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Geco-iT Template
+qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
 
  - Version             : ${VERSION}
  - Cloud-init          : true
 
-Creation date : ${template_vmcreated}
-"
+Creation date : ${template_vmcreated}"
 
 qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0
 #qm set ${TEMPLATE_VMID} --net1 virtio,bridge=vmbr1
@@ -123,10 +123,10 @@ qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATEFORM}.x86_64.qcow
 qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS}
 
 # set hook-script
-qm set ${TEMPLATE_VMID} -hookscript ${SNIPPET_STORAGE}:snippets/hook-fcos.sh
-
+# set hook-script
+qm set ${TEMPLATE_VMID} --hookscript ${SNIPPET_STORAGE}:snippets/hook-fcos.sh
 
 # convert vm template
 echo -n "Convert VM ${TEMPLATE_VMID} in proxmox vm template... "
-qm template ${TEMPLATE_VMID} &> /dev/null || true
+qm template ${TEMPLATE_VMID} &> /dev/null
 echo "[done]"
