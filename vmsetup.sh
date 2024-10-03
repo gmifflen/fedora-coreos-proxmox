@@ -75,7 +75,7 @@ TEMPLATE_IGNITION=${TEMPLATE_IGNITION:-fcos-base-tmplt.yaml}
 PRIMARY_DISK_SIZE=${PRIMARY_DISK_SIZE:-32G}
 # Default to stable, alternatively override with environment variable with either stable, testing, or next
 STREAMS=${STREAMS:-stable}
-ARCHITECTURES=${ARCHITECTURES:-x86_64}
+ARCHITECTURES=${ARCHITECTURES:-${ARCHITECTURES}}
 PLATFORM=${PLATFORM:-qemu}
 BASEURL=${BASEURL:-https://builds.coreos.fedoraproject.org}
 # URL to fetch the stable release JSON
@@ -153,18 +153,18 @@ esac
 
 # Function to check if CoreOS image already exists
 coreos_image_exists() {
-    [[ -e fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ]]
+    [[ -e fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2 ]]
 }
 
 if ! coreos_image_exists; then
     echo "Download fedora coreos..."
     if ! wget -q --show-progress \
-        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/${ARCHITECTURES}/fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz; then
+        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/${ARCHITECTURES}/fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.${FORMATS}; then
         echo "Failed to download Fedora CoreOS image."
         exit 1
     fi
 
-    if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz; then
+    if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.${FORMATS}; then
         echo "Failed to extract Fedora CoreOS image."
         exit 1
     fi
