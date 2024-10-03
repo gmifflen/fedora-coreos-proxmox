@@ -163,7 +163,9 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
             --onboot 1 \
             --ostype l26 \
             --tablet 0 \
-            --boot c --bootdisk scsi0
+            --boot c --bootdisk scsi0 \
+            --bios ovmf \
+            --machine q35
 
 # Add EFI disk for UEFI
 qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,format=qcow2,efitype=4m,pre-enrolled-keys=1
