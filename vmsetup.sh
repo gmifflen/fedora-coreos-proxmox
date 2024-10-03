@@ -60,6 +60,7 @@ TEMPLATE_VMSTORAGE=${TEMPLATE_VMSTORAGE}
 SNIPPET_STORAGE=${SNIPPET_STORAGE}
 VMDISK_OPTIONS=${VMDISK_OPTIONS}
 TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
+PRIMARY_DISK_SIZE=${PRIMARY_DISK_SIZE:-32G}  # Default to 32G if not set
 
 # URL to fetch the stable release JSON
 RELEASE_JSON="https://builds.coreos.fedoraproject.org/streams/stable.json"
@@ -193,7 +194,7 @@ else
         vmdisk_format=""
 fi
 qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}
-qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS}
+qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS},size=${PRIMARY_DISK_SIZE}
 
 # set hook-script
 qm set ${TEMPLATE_VMID} --hookscript ${SNIPPET_STORAGE}:snippets/hook-fcos.sh
