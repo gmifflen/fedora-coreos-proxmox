@@ -1,21 +1,4 @@
-# This script sets up a Fedora CoreOS virtual machine template on Proxmox VE.
-# 
-# It performs the following steps:
-# 
-# 1. Sets global variables for VM configuration and Fedora CoreOS version.
-# 2. Checks if the specified VM storage and snippet storage exist in Proxmox VE.
-# 3. Ensures that the snippet storage has content snippets enabled.
-# 4. Copies the hook script and ignition config to the snippet storage.
-# 5. Determines the type of storage (file or block) for the VM.
-# 6. Downloads the Fedora CoreOS image if it does not already exist.
-# 7. Creates a new VM with the specified configuration.
-# 8. Sets the VM description with the Fedora CoreOS version and creation date.
-# 9. Configures the network interface for the VM.
-# 10. Creates a Cloud-init disk for the VM.
-# 11. Imports the Fedora CoreOS disk into the VM.
-# 12. Sets the hook script for the VM.
-# 13. Converts the VM into a Proxmox VE template.
-#!/bin/bash
+#! /bin/bash
 
 # Uncomment the following line to enable debug mode
 # set -x
@@ -27,6 +10,14 @@ set -e
 # force english messages
 export LANG=C
 export LC_ALL=C
+
+# Source the template.conf file
+if [ -f template.conf ]; then
+    source template.conf
+else
+    echo "Configuration file template.conf not found!"
+    exit 1
+fi
 
 # template vm vars
 TEMPLATE_VMID=${TEMPLATE_VMID}
@@ -41,10 +32,61 @@ TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
 RELEASE_JSON="https://builds.coreos.fedoraproject.org/streams/stable.json"
 # Fetch the JSON data and extract the stable release number using jq
 VERSION=$(curl -s $RELEASE_JSON | jq -r '.architectures.x86_64.artifacts.qemu.release')
+if [ $? -ne 0 ]; then
+    echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
+    exit 1
+fi
 STREAMS=${STREAMS}
 PLATFORM=qemu
 BASEURL=https://builds.coreos.fedoraproject.org
 
+# =============================================================================================
+# Check requirements
+
+# Check if running in Proxmox VE environment
+if ! command -v pvesh &> /dev/null; then
+    echo "This script must be run in a Proxmox VE environment."
+    exit 1
+fi
+
+# Verify required commands are available
+missing_cmds=()
+for cmd in curl jq wget xz qm; do
+        if ! command -v $cmd &> /dev/null; then
+# Check if there are any missing commands and prompt the user to install them
+if [ ${#missing_cmds[@]} -ne 0 ]; then
+        fi
+done
+
+if [ ${#missing_cmds[@]} -ne 0 ]; then
+        echo "The following required commands are missing: ${missing_cmds[@]}"
+        read -p "Do you want to install them? (y/n) " choice
+        if [[ $choice == [Yy]* ]]; then
+                if command -v apt-get &> /dev/null; then
+                        sudo apt-get update && sudo apt-get install -y ${missing_cmds[@]}
+                elif command -v yum &> /dev/null; then
+                        sudo yum install -y ${missing_cmds[@]}
+                elif command -v dnf &> /dev/null; then
+                        sudo dnf install -y ${missing_cmds[@]}
+                else
+                        echo "Package manager not found. Please install the missing commands manually."
+                        exit 1
+                fi
+        else
+                echo "The following commands are required: ${missing_cmds[@]}. Exiting."
+                exit 1
+        fi
+fi
+# Ensure required environment variables are set
+# This section checks if all necessary environment variables are set to avoid runtime errors.
+required_vars=(TEMPLATE_VMID TEMPLATE_VMSTORAGE SNIPPET_STORAGE STREAMS TEMPLATE_NAME VMDISK_OPTIONS)
+for var in "${required_vars[@]}"; do
+    if [ -z "${!var}" ]; then
+        echo "Environment variable $var is required but not set."
+        exit 1
+    fi
+done
+done
 
 # =============================================================================================
 # main()
@@ -92,8 +134,17 @@ esac
 [[ ! -e fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ]] && {
     echo "Download fedora coreos..."
     wget -q --show-progress \
-        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz
-    xz -dv fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz
+    if ! wget -q --show-progress \
+        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz; then
+        echo "Failed to download Fedora CoreOS image."
+        exit 1
+    fi
+
+    if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz; then
+        echo "Failed to extract Fedora CoreOS image."
+        exit 1
+    fi
+}
 }
 }
 
@@ -123,13 +174,13 @@ qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0
 echo -e "\nCreate Cloud-init vmdisk..."
 qm set ${TEMPLATE_VMID} --ide2 ${TEMPLATE_VMSTORAGE}:cloudinit
 
-# import fedora disk
-if [[ "${TEMPLATE_VMSTORAGE_type}" == "file" ]]
-then
-	vmdisk_name="${TEMPLATE_VMID}/vm-${TEMPLATE_VMID}-disk-0.qcow2"
-	vmdisk_format="--format qcow2"
+# Import Fedora CoreOS disk
+# This section imports the Fedora CoreOS disk image into the Proxmox VM storage.
+if [[ "${TEMPLATE_VMSTORAGE_type}" == "file" ]]; then
+        vmdisk_name="${TEMPLATE_VMID}/vm-${TEMPLATE_VMID}-disk-0.qcow2"
+        vmdisk_format="--format qcow2"
 else
-	vmdisk_name="vm-${TEMPLATE_VMID}-disk-0"
+        vmdisk_name="vm-${TEMPLATE_VMID}-disk-0"
         vmdisk_format=""
 fi
 qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}
@@ -140,5 +191,8 @@ qm set ${TEMPLATE_VMID} --hookscript ${SNIPPET_STORAGE}:snippets/hook-fcos.sh
 
 # convert vm template
 echo -n "Convert VM ${TEMPLATE_VMID} in proxmox vm template... "
-qm template ${TEMPLATE_VMID} &> /dev/null
+if ! qm template ${TEMPLATE_VMID} &> /dev/null; then
+    echo "[failed]"
+    exit 1
+fi
 echo "[done]"
