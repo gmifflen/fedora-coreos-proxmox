@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 # Uncomment the following line to enable debug mode
 # set -x
@@ -19,30 +19,6 @@ else
     exit 1
 fi
 
-# template vm vars
-TEMPLATE_VMID=${TEMPLATE_VMID}
-TEMPLATE_VMSTORAGE=${TEMPLATE_VMSTORAGE}
-SNIPPET_STORAGE=${SNIPPET_STORAGE}
-VMDISK_OPTIONS=${VMDISK_OPTIONS}
-
-TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
-
-# fcos version
-# URL to fetch the stable release JSON
-RELEASE_JSON="https://builds.coreos.fedoraproject.org/streams/stable.json"
-# Fetch the JSON data and extract the stable release number using jq
-VERSION=$(curl -s $RELEASE_JSON | jq -r '.architectures.x86_64.artifacts.qemu.release')
-if [ $? -ne 0 ]; then
-    echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
-    exit 1
-fi
-STREAMS=${STREAMS}
-PLATFORM=qemu
-BASEURL=https://builds.coreos.fedoraproject.org
-
-# =============================================================================================
-# Check requirements
-
 # Check if running in Proxmox VE environment
 if ! command -v pvesh &> /dev/null; then
     echo "This script must be run in a Proxmox VE environment."
@@ -53,10 +29,12 @@ fi
 missing_cmds=()
 for cmd in curl jq wget xz qm; do
         if ! command -v $cmd &> /dev/null; then
-# Check if there are any missing commands and prompt the user to install them
-if [ ${#missing_cmds[@]} -ne 0 ]; then
+            missing_cmds+=($cmd)
         fi
 done
+
+# Check if there are any missing commands and prompt the user to install them
+if [ ${#missing_cmds[@]} -ne 0 ]; then
 
 if [ ${#missing_cmds[@]} -ne 0 ]; then
         echo "The following required commands are missing: ${missing_cmds[@]}"
@@ -77,7 +55,26 @@ if [ ${#missing_cmds[@]} -ne 0 ]; then
                 exit 1
         fi
 fi
-# Ensure required environment variables are set
+
+# template vm vars
+TEMPLATE_VMID=${TEMPLATE_VMID}
+TEMPLATE_VMSTORAGE=${TEMPLATE_VMSTORAGE}
+SNIPPET_STORAGE=${SNIPPET_STORAGE}
+VMDISK_OPTIONS=${VMDISK_OPTIONS}
+TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
+
+# URL to fetch the stable release JSON
+RELEASE_JSON="https://builds.coreos.fedoraproject.org/streams/stable.json"
+# Fetch the JSON data and extract the stable release number using jq
+VERSION=$(curl -s $RELEASE_JSON | jq -r '.architectures.x86_64.artifacts.qemu.release')
+if [ $? -ne 0 ]; then
+    echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
+    exit 1
+fi
+STREAMS=${STREAMS}
+PLATFORM=qemu
+BASEURL=https://builds.coreos.fedoraproject.org
+
 # This section checks if all necessary environment variables are set to avoid runtime errors.
 required_vars=(TEMPLATE_VMID TEMPLATE_VMSTORAGE SNIPPET_STORAGE STREAMS TEMPLATE_NAME VMDISK_OPTIONS)
 for var in "${required_vars[@]}"; do
@@ -162,12 +159,10 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
 			--boot c --bootdisk scsi0
 
 template_vmcreated=$(date +%Y-%m-%d)
-qm set ${TEMPLATE_VMID} --description 'Fedora CoreOS - Template
-
+qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
  - Version             : ${VERSION}
  - Cloud-init          : true
-
-Creation date : ${template_vmcreated}'
+ - Creation date       : ${template_vmcreated}"
 
 qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0
 
@@ -175,7 +170,6 @@ echo -e "\nCreate Cloud-init vmdisk..."
 qm set ${TEMPLATE_VMID} --ide2 ${TEMPLATE_VMSTORAGE}:cloudinit
 
 # Import Fedora CoreOS disk
-# This section imports the Fedora CoreOS disk image into the Proxmox VM storage.
 if [[ "${TEMPLATE_VMSTORAGE_type}" == "file" ]]; then
         vmdisk_name="${TEMPLATE_VMID}/vm-${TEMPLATE_VMID}-disk-0.qcow2"
         vmdisk_format="--format qcow2"
