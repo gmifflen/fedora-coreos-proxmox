@@ -86,6 +86,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Fetch the SHA256 hash from the JSON data
+SHA256_HASH=$(curl -s $RELEASE_JSON | jq -r '.architectures.x86_64.artifacts.qemu.formats.qcow2.disk.sha256')
+if [ $? -ne 0 ]; then
+    echo "Failed to fetch the SHA256 hash from $RELEASE_JSON"
+    exit 1
+fi
+
 # This section checks if all necessary environment variables are set to avoid runtime errors.
 required_vars=(TEMPLATE_VMID TEMPLATE_VMSTORAGE SNIPPET_STORAGE STREAMS TEMPLATE_NAME VMDISK_OPTIONS)
 for var in "${required_vars[@]}"; do
@@ -156,15 +163,9 @@ if ! coreos_image_exists; then
         exit 1
     fi
 
-    echo "Download Fedora CoreOS SHA256 hash..."
-    if ! wget -q --show-progress \
-        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz.sha256; then
-        echo "Failed to download Fedora CoreOS SHA256 hash."
-        exit 1
-    fi
-
     echo "Validate Fedora CoreOS image..."
-    if ! sha256sum -c fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz.sha256; then
+    echo "${SHA256_HASH}  fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2" > fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.sha256
+    if ! sha256sum -c fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.sha256; then
         echo "SHA256 validation failed for Fedora CoreOS image."
         exit 1
     fi
