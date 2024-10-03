@@ -29,24 +29,21 @@ export LANG=C
 export LC_ALL=C
 
 # template vm vars
-TEMPLATE_VMID="900"
-TEMPLATE_VMSTORAGE="hdd_data"
-SNIPPET_STORAGE="hdd_data"
-VMDISK_OPTIONS=",discard=on"
+TEMPLATE_VMID=${TEMPLATE_VMID}
+TEMPLATE_VMSTORAGE=${TEMPLATE_VMSTORAGE}
+SNIPPET_STORAGE=${SNIPPET_STORAGE}
+VMDISK_OPTIONS=${VMDISK_OPTIONS}
 
 TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
 
 # fcos version
 # URL to fetch the stable release JSON
-URL="https://builds.coreos.fedoraproject.org/streams/stable.json"
+RELEASE_JSON="https://builds.coreos.fedoraproject.org/streams/stable.json"
 # Fetch the JSON data and extract the stable release number using jq
-STABLE_RELEASE=$(curl -s $URL | jq -r '.architectures.x86_64.artifacts.qemu.release')
-STREAMS=stable
+VERSION=$(curl -s $RELEASE_JSON | jq -r '.architectures.x86_64.artifacts.qemu.release')
+STREAMS=${STREAMS}
 PLATFORM=qemu
 BASEURL=https://builds.coreos.fedoraproject.org
-BASEURL=https://builds.coreos.fedoraproject.org
-
-
 
 
 # =============================================================================================
@@ -102,9 +99,9 @@ esac
 
 # create a new VM
 echo "Create fedora coreos vm ${VMID}"
-qm create ${TEMPLATE_VMID} --name fcos-tmplt
+qm create ${TEMPLATE_VMID} --name ${TEMPLATE_NAME}
 qm set ${TEMPLATE_VMID} --memory 4096 \
-			--cpu host \
+			--cpu max \
 			--cores 4 \
 			--agent enabled=1 \
 			--autostart \
@@ -122,7 +119,6 @@ qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
 Creation date : ${template_vmcreated}"
 
 qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0
-#qm set ${TEMPLATE_VMID} --net1 virtio,bridge=vmbr1
 
 echo -e "\nCreate Cloud-init vmdisk..."
 qm set ${TEMPLATE_VMID} --ide2 ${TEMPLATE_VMSTORAGE}:cloudinit
@@ -136,10 +132,9 @@ else
 	vmdisk_name="vm-${TEMPLATE_VMID}-disk-0"
         vmdisk_format=""
 fi
-qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATEFORM}.x86_64.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}
+qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}
 qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS}
 
-# set hook-script
 # set hook-script
 qm set ${TEMPLATE_VMID} --hookscript ${SNIPPET_STORAGE}:snippets/hook-fcos.sh
 

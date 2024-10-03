@@ -1,46 +1,9 @@
-# This YAML configuration file is used to set up various services and scripts on a Fedora CoreOS system.
-# It includes the following components:
-#
-# 1. MOTD Script:
-#    - Path: /usr/local/bin/next-motd
-#    - Mode: 0755
-#    - Description: Generates a custom message of the day (MOTD) with system information.
-#
-# 2. CloudInit Script:
-#    - Path: /usr/local/bin/next-cloudinit
-#    - Mode: 0755
-#    - Description: Applies basic CloudInit settings, including system preparation and network configuration.
-#
-# 3. Issue Message:
-#    - Path: /etc/console-login-helper-messages/issue.d/00_next.issue
-#    - Mode: 0644
-#    - Description: Displays a welcome message on the console login screen.
-#
-# 4. Kernel Configuration:
-#    - Path: /etc/sysctl.d/20-silence-audit.conf
-#    - Mode: 0644
-#    - Description: Raises console message logging level to hide audit messages from the interactive console.
-#
-# 5. Systemd Services:
-#    - next-motd.service:
-#      - Description: NeXt-Security MOTD service that runs the MOTD script.
-#      - Dependencies: Runs before console-login-helper-messages-motdgen.service and after network-online.target.
-#    - next-cloudinit.service:
-#      - Description: NeXt-Security CloudInit service that applies CloudInit settings on boot.
-#      - Dependencies: Wants network-online.target and runs after network.target and network-online.target.
-#    - setup-qemu-guest-agent.service:
-#      - Description: Sets up the QEMU Guest Agent if running on a QEMU platform.
-#      - Dependencies: Runs after network-online.target and requires network-online.target.
-#    - fstrim.timer:
-#      - Description: Enables periodic file system trimming.
-#    - fstrim.service:
-#      - Description: Overrides the default fstrim service to run with specific options.
 # motd script
 - path: /usr/local/bin/next-motd
-      mode: 0755
-      contents:
-        inline: |
-          #!/bin/bash
+  mode: 0755
+  contents:
+    inline: |
+      #!/bin/bash
           
           OUT=/etc/console-login-helper-messages/motd.d/22_next.motd
           
@@ -306,30 +269,29 @@
           exit 0 
 
 # next-issue
-- path: /etc/console-login-helper-messages/issue.d/00_next.issue
-      mode: 0644
-      contents:
-        inline: |
+    - path: /etc/console-login-helper-messages/issue.d/00_next.issue
+          mode: 0644
+          contents:
+            inline: |
 
-          Welcome on a server powered by
+              Welcome on a server powered by
 
-            _  _    __  ___           ___                  _ _        
-           | \| |___\ \/ / |_   ___  / __| ___ __ _  _ _ _(_) |_ _  _ 
-           | .` / -_)>  <|  _| |___| \__ \/ -_) _| || | '_| |  _| || |
-           |_|\_\___/_/\_\\__|       |___/\___\__|\_,_|_| |_|\__|\_, |
-                                                                 |__/ 
-            
-          .
+                _  _    __  ___           ___                  _ _        
+              | \| |___\ \/ / |_   ___  / __| ___ __ _  _ _ _(_) |_ _  _ 
+              | .` / -_)>  <|  _| |___| \__ \/ -_) _| || | '_| |  _| || |
+              |_|\_\___/_/\_\\__|       |___/\___\__|\_,_|_| |_|\__|\_, |
+                                                                    |__/ 
+                
+              .
 
 # kernel config
-- path: /etc/sysctl.d/20-silence-audit.conf
-  mode: 0644      
-  contents:
-    inline: |
-      # Raise console message logging level from DEBUG (7) to WARNING (4)
-      # to hide audit messages from the interactive console
-      kernel.printk=4
-
+    - path: /etc/sysctl.d/20-silence-audit.conf
+      mode: 0644      
+      contents:
+        inline: |
+          # Raise console message logging level from DEBUG (7) to WARNING (4)
+          # to hide audit messages from the interactive console
+          kernel.printk=4
 
 # next-motd.service
     - path: /etc/console-login-helper-messages/issue.d/00_next.issue
@@ -351,10 +313,10 @@
     - path: /etc/sysctl.d/20-silence-audit.conf
       mode: 0644      
 # next-cloudinit: apply cloudinit settings on boot
-- name: next-cloudinit.service
-          # Raise console message logging level from DEBUG (7) to WARNING (4)
-          # to hide audit messages from the interactive console
-          kernel.printk=4
+    - name: next-cloudinit.service
+              # Raise console message logging level from DEBUG (7) to WARNING (4)
+              # to hide audit messages from the interactive console
+              kernel.printk=4
 
 # next-motd.service
 systemd:
@@ -394,25 +356,25 @@ systemd:
         WantedBy=multi-user.target
 
 # qemu-guest-agent
-- name: setup-qemu-guest-agent.service
-  enabled: true
-  contents: |
-    [Unit]
-    Description=NeXt-Security Setup Qemu Guest Agent
-    After=network-online.target
-    Require=network-online.target
-    ConditionKernelCommandLine=ignition.platform.id=qemu
-    ConditionPathExists=!/var/lib/qemu-guest-agent.stamp
+    - name: setup-qemu-guest-agent.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=NeXt-Security Setup Qemu Guest Agent
+        After=network-online.target
+        Require=network-online.target
+        ConditionKernelCommandLine=ignition.platform.id=qemu
+        ConditionPathExists=!/var/lib/qemu-guest-agent.stamp
 
-    [Service]
-    Type=oneshot
-    RemainAfterExit=yes
-    ExecStart=/bin/rpm-ostree install qemu-guest-agent
-    ExecStart=/bin/touch /var/lib/qemu-guest-agent.stamp
-    ExecStart=/bin/systemctl --no-block reboot
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=/bin/rpm-ostree install qemu-guest-agent
+        ExecStart=/bin/touch /var/lib/qemu-guest-agent.stamp
+        ExecStart=/bin/systemctl --no-block reboot
 
-    [Install]
-    WantedBy=multi-user.target
+        [Install]
+        WantedBy=multi-user.target
 
 # fstrim
 - name: fstrim.timer
