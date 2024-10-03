@@ -86,7 +86,7 @@ if [ $? -ne 0 ]; then
     echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
     exit 1
 fi
-FORMATS=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats")
+FORMATS=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats | keys | .[0]")
 if [ $? -ne 0 ]; then
     echo "Failed to fetch the formats JSON from $RELEASE_JSON"
     exit 1
