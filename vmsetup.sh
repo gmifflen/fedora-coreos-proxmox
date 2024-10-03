@@ -70,24 +70,25 @@ TEMPLATE_VMID=$(find_next_available_vmid)
 TEMPLATE_VMSTORAGE=${TEMPLATE_VMSTORAGE}
 SNIPPET_STORAGE=${SNIPPET_STORAGE}
 VMDISK_OPTIONS=${VMDISK_OPTIONS}
-TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
+TEMPLATE_IGNITION=${TEMPLATE_IGNITION:-fcos-base-tmplt.yaml}
 # Default to 32G if not set
 PRIMARY_DISK_SIZE=${PRIMARY_DISK_SIZE:-32G}
-STREAMS=${STREAMS}
-PLATFORM=qemu
-BASEURL=https://builds.coreos.fedoraproject.org
-
+# Default to stable, alternatively override with environment variable with either stable, testing, or next
+STREAMS=${STREAMS:-stable}
+ARCHITECTURES=${ARCHITECTURES:-x86_64}
+PLATFORM=${PLATFORM:-qemu}
+BASEURL=${BASEURL:-https://builds.coreos.fedoraproject.org}
 # URL to fetch the stable release JSON
-RELEASE_JSON="https://builds.coreos.fedoraproject.org/streams/stable.json"
+RELEASE_JSON=${BASEURL}/streams/${STREAMS}.json
 # Fetch the JSON data and extract the stable release number using jq
-VERSION=$(curl -s $RELEASE_JSON | jq -r '.architectures.x86_64.artifacts.qemu.release')
+VERSION=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.release")
 if [ $? -ne 0 ]; then
     echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
     exit 1
 fi
 
 # Fetch the SHA256 hash from the JSON data
-SHA256_HASH=$(curl -s $RELEASE_JSON | jq -r '.architectures.x86_64.artifacts.qemu.formats.qcow2.disk.sha256')
+SHA256_HASH=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.qcow2.disk.sha256")
 if [ $? -ne 0 ]; then
     echo "Failed to fetch the SHA256 hash from $RELEASE_JSON"
     exit 1
@@ -153,19 +154,19 @@ coreos_image_exists() {
 if ! coreos_image_exists; then
     echo "Download fedora coreos..."
     if ! wget -q --show-progress \
-        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz; then
+        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/${ARCHITECTURES}/fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz; then
         echo "Failed to download Fedora CoreOS image."
         exit 1
     fi
 
-    if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz; then
+    if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz; then
         echo "Failed to extract Fedora CoreOS image."
         exit 1
     fi
 
     echo "Validate Fedora CoreOS image..."
-    echo "${SHA256_HASH}  fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2" > fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.sha256
-    if ! sha256sum -c fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.sha256; then
+    echo "${SHA256_HASH}  fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2" > fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.sha256
+    if ! sha256sum -c fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.sha256; then
         echo "SHA256 validation failed for Fedora CoreOS image."
         exit 1
     fi
@@ -213,7 +214,7 @@ else
         vmdisk_name="vm-${TEMPLATE_VMID}-disk-0"
         vmdisk_format=""
 fi
-qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}
+qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}
 qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS},size=${PRIMARY_DISK_SIZE}
 
 # set hook-script
