@@ -35,8 +35,6 @@ done
 
 # Check if there are any missing commands and prompt the user to install them
 if [ ${#missing_cmds[@]} -ne 0 ]; then
-
-if [ ${#missing_cmds[@]} -ne 0 ]; then
         echo "The following required commands are missing: ${missing_cmds[@]}"
         read -p "Do you want to install them? (y/n) " choice
         if [[ $choice == [Yy]* ]]; then
@@ -140,21 +138,19 @@ esac
         exit 1
     fi
 }
-}
-}
 
 # create a new VM
 echo "Create fedora coreos vm ${TEMPLATE_VMID}"
 qm create ${TEMPLATE_VMID} --name ${TEMPLATE_NAME}
 qm set ${TEMPLATE_VMID} --memory 4096 \
-			--cpu max \
-			--cores 4 \
-			--agent enabled=1 \
-			--autostart \
-			--onboot 1 \
-			--ostype l26 \
-			--tablet 0 \
-			--boot c --bootdisk scsi0
+            --cpu max \
+            --cores 4 \
+            --agent enabled=1 \
+            --autostart \
+            --onboot 1 \
+            --ostype l26 \
+            --tablet 0 \
+            --boot c --bootdisk scsi0
 
 template_vmcreated=$(date +%Y-%m-%d)
 qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
