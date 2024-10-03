@@ -43,12 +43,16 @@ YQ="/usr/local/bin/yq read --exitStatus --printMode v --stripComments --"
 #
 setup_fcoreosct()
 {
-        local CT_VER=0.7.0
         local ARCH=x86_64
         local OS=unknown-linux-gnu # Linux
         local DOWNLOAD_URL=https://github.com/coreos/fcct/releases/download
-		[[ -x /usr/local/bin/fcos-ct ]] && [[ "x$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')" == "x${CT_VER}" ]] && return 0
-		[[ -x /usr/local/bin/fcos-ct ]] && [[ "x$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')" == "x${CT_VER}" ]] && return 0
+
+        # Fetch the latest version from GitHub API
+        local CT_VER=$(curl -s https://api.github.com/repos/coreos/fcct/releases/latest | jq -r .tag_name | sed 's/^v//')
+
+        # Check if the binary already exists and matches the latest version
+        [[ -x /usr/local/bin/fcos-ct ]] && [[ "x$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')" == "x${CT_VER}" ]] && return 0
+
         echo "Setup Fedora CoreOS config transpiler..."
         rm -f /usr/local/bin/fcos-ct
         wget --quiet --show-progress ${DOWNLOAD_URL}/v${CT_VER}/fcct-${ARCH}-${OS} -O /usr/local/bin/fcos-ct
