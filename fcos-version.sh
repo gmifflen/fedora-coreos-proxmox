@@ -1,10 +1,13 @@
 #!/bin/bash
 
 # URL to fetch the stable release JSON
-URL="https://builds.coreos.fedoraproject.org/streams/stable.json"
-
+RELEASE_JSON="https://builds.coreos.fedoraproject.org/streams/stable.json"
 # Fetch the JSON data and extract the stable release number using jq
-STABLE_RELEASE=$(curl -s $URL | jq -r '.architectures.x86_64.artifacts.qemu.release')
+VERSION=$(curl -s $RELEASE_JSON | jq -r '.architectures.x86_64.artifacts.qemu.release')
+if [ $? -ne 0 ]; then
+    echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
+    exit 1
+fi
 
 # Print the stable release number
-echo "Current stable release number: $STABLE_RELEASE"
+echo "Current stable release number: $RELEASE_JSON"

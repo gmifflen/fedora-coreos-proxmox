@@ -54,13 +54,28 @@ if [ ${#missing_cmds[@]} -ne 0 ]; then
         fi
 fi
 
+# Function to find the next available VMID starting from 900
+find_next_available_vmid() {
+    local vmid=900
+    while pvesh get /nodes/$(hostname)/qemu | grep -q "\"vmid\": $vmid"; do
+        vmid=$((vmid + 1))
+    done
+    echo $vmid
+}
+
+# Set TEMPLATE_VMID to 900 or the next available VMID
+TEMPLATE_VMID=$(find_next_available_vmid)
+
 # template vm vars
-TEMPLATE_VMID=${TEMPLATE_VMID}
 TEMPLATE_VMSTORAGE=${TEMPLATE_VMSTORAGE}
 SNIPPET_STORAGE=${SNIPPET_STORAGE}
 VMDISK_OPTIONS=${VMDISK_OPTIONS}
 TEMPLATE_IGNITION="fcos-base-tmplt.yaml"
-PRIMARY_DISK_SIZE=${PRIMARY_DISK_SIZE:-32G}  # Default to 32G if not set
+# Default to 32G if not set
+PRIMARY_DISK_SIZE=${PRIMARY_DISK_SIZE:-32G}
+STREAMS=${STREAMS}
+PLATFORM=qemu
+BASEURL=https://builds.coreos.fedoraproject.org
 
 # URL to fetch the stable release JSON
 RELEASE_JSON="https://builds.coreos.fedoraproject.org/streams/stable.json"
@@ -70,9 +85,6 @@ if [ $? -ne 0 ]; then
     echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
     exit 1
 fi
-STREAMS=${STREAMS}
-PLATFORM=qemu
-BASEURL=https://builds.coreos.fedoraproject.org
 
 # This section checks if all necessary environment variables are set to avoid runtime errors.
 required_vars=(TEMPLATE_VMID TEMPLATE_VMSTORAGE SNIPPET_STORAGE STREAMS TEMPLATE_NAME VMDISK_OPTIONS)
