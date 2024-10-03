@@ -88,7 +88,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Fetch the SHA256 hash from the JSON data
-SHA256_HASH=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.qcow2.disk.sha256")
+SHA256_HASH=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.qcow2.disk.uncompressed-sha256")
 if [ $? -ne 0 ]; then
     echo "Failed to fetch the SHA256 hash from $RELEASE_JSON"
     exit 1
