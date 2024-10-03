@@ -138,7 +138,12 @@ case "$(pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader | grep ^t
         ;;
 esac
 
-[[ ! -e fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ]] && {
+# Function to check if CoreOS image already exists
+coreos_image_exists() {
+    [[ -e fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ]]
+}
+
+if ! coreos_image_exists; then
     echo "Download fedora coreos..."
     if ! wget -q --show-progress \
         ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz; then
@@ -163,7 +168,9 @@ esac
         echo "SHA256 validation failed for Fedora CoreOS image."
         exit 1
     fi
-}
+else
+    echo "CoreOS image already exists. Skipping download."
+fi
 
 # create a new VM
 echo "Create fedora coreos vm ${TEMPLATE_VMID}"
