@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # This script is a hook for Fedora CoreOS on Proxmox. It performs various setup tasks and generates necessary configuration files for Fedora CoreOS VMs.
 # 
 # Usage:
@@ -25,7 +27,6 @@
 #     - Saves the cloud-init instance ID.
 #     - Sets VM configuration arguments for Fedora CoreOS.
 #     - Restarts the VM if new Ignition settings are generated.
-#!/bin/bash
 
 # set -e is commented out to allow the script to continue even if some commands fail
 #set -e
@@ -36,7 +37,7 @@ phase="$2"
 # global vars
 COREOS_TMPLT=/opt/fcos-tmplt.yaml
 COREOS_FILES_PATH=/etc/pve/next-pve/coreos
-YQ="/usr/local/bin/yq read --exitStatus --printMode v --stripComments --"
+YQ="/usr/local/bin/yq"
 
 # ==================================================================================================================================================================
 # functions()
@@ -47,8 +48,17 @@ setup_fcoreosct()
         local OS=unknown-linux-gnu # Linux
         local DOWNLOAD_URL=https://github.com/coreos/fcct/releases/download
 
-        # Fetch the latest version from GitHub API
-        local CT_VER=$(curl -s https://api.github.com/repos/coreos/fcct/releases/latest | jq -r .tag_name | sed 's/^v//')
+		# Fetch the latest version from GitHub API with a timeout and error handling
+		local CT_VER=$(curl -s --max-time 10 https://api.github.com/repos/coreos/fcct/releases/latest | jq -r .tag_name | sed 's/^v//')
+		if [[ -z "${CT_VER}" ]]; then
+		# Check if the binary already exists and matches the latest version
+		if [[ -x /usr/local/bin/fcos-ct ]]; then
+			current_version=$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')
+			if [[ "x${current_version}" == "x${CT_VER}" ]]; then
+				return 0
+			fi
+		fi
+		fi
 
         # Check if the binary already exists and matches the latest version
         [[ -x /usr/local/bin/fcos-ct ]] && [[ "x$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')" == "x${CT_VER}" ]] && return 0
@@ -60,7 +70,11 @@ setup_fcoreosct()
 }
 setup_fcoreosct
 
-setup_yq()
+	if [[ -x /usr/bin/wget ]]; then
+		download_command="wget --quiet --show-progress --output-document"
+	else
+		download_command="curl --location --output"
+	fi
 {
     # Fetch the latest version of yq from GitHub API
     local VER=$(curl --silent "https://api.github.com/repos/mikefarah/yq/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
@@ -75,24 +89,47 @@ setup_yq()
 setup_yq
 
 # ==================================================================================================================================================================
-# main()
+	instance_id="$(qm cloudinit dump ${vmid} meta | ${YQ} read --exitStatus --printMode v --stripComments -- 'instance-id')"
+	if [[ $? -ne 0 || -z "${instance_id}" ]]; then
+		echo "Error: Failed to retrieve instance-id for VM${vmid}"
+		exit 1
+	fi
 #
 if [[ "${phase}" == "pre-start" ]]
-then
-	instance_id="$(qm cloudinit dump ${vmid} meta | ${YQ} - 'instance-id')"
-
+	if [[ -e ${COREOS_FILES_PATH}/${vmid}.id ]]; then
+		stored_instance_id=$(cat ${COREOS_FILES_PATH}/${vmid}.id)
+		if [[ "x${instance_id}" != "x${stored_instance_id}" ]]; then
+			rm -f ${COREOS_FILES_PATH}/${vmid}.ign # cloudinit config change
+		fi
+	fi
 	# same cloudinit config ?
 	[[ -e ${COREOS_FILES_PATH}/${vmid}.id ]] && [[ "x${instance_id}" != "x$(cat ${COREOS_FILES_PATH}/${vmid}.id)" ]] && {
 		rm -f ${COREOS_FILES_PATH}/${vmid}.ign # cloudinit config change
 	}
 	[[ -e ${COREOS_FILES_PATH}/${vmid}.ign ]] && exit 0 # already done
 
-	mkdir -p ${COREOS_FILES_PATH} || exit 1
-		
-	# check config
-	cipasswd="$(qm cloudinit dump ${vmid} user | ${YQ} - 'password' 2> /dev/null)" || true # can be empty
-	[[ "x${cipasswd}" != "x" ]] && VALIDCONFIG=true
-	${VALIDCONFIG:-false} || [[ "x$(qm cloudinit dump ${vmid} user | ${YQ} - 'ssh_authorized_keys[*]')" == "x" ]] || VALIDCONFIG=true
+	cipasswd="$(qm cloudinit dump ${vmid} user 2> /dev/null | ${YQ} read --exitStatus --printMode v --stripComments -- 'password' 2> /dev/null)"
+	if [[ $? -ne 0 ]]; then
+		echo "Error: Failed to retrieve password for VM${vmid}"
+		exit 1
+	# Check if password is set
+	if [[ "x${cipasswd}" != "x" ]]; then
+		VALIDCONFIG=true
+	fi
+
+	# Check if SSH keys are set
+	if [[ -z "${VALIDCONFIG}" ]]; then
+		ssh_keys=$(qm cloudinit dump ${vmid} user | ${YQ} read --exitStatus --printMode v --stripComments -- 'ssh_authorized_keys[*]')
+		if [[ "x${ssh_keys}" != "x" ]]; then
+			VALIDCONFIG=true
+		fi
+	fi
+
+	# If neither password nor SSH keys are set, exit with error
+	if [[ -z "${VALIDCONFIG}" ]]; then
+		echo "Fedora CoreOS: you must set passwd or ssh-key before start VM${vmid}"
+		exit 1
+	fi
 	${VALIDCONFIG:-false} || {
 		echo "Fedora CoreOS: you must set passwd or ssh-key before start VM${vmid}"
 		exit 1
@@ -101,19 +138,23 @@ then
 	echo -n "Fedora CoreOS: Generate yaml users block... "
 	echo -e "# This file is managed by next-iT hook-script. Do not edit.\n" > ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo -e "variant: fcos\nversion: 1.1.0" >> ${COREOS_FILES_PATH}/${vmid}.yaml
-	echo -e "# user\npasswd:\n  users:" >> ${COREOS_FILES_PATH}/${vmid}.yaml
+	hostname="$(qm cloudinit dump ${vmid} user | ${YQ} read --exitStatus --printMode v --stripComments -- 'hostname' 2> /dev/null)"
+	if [[ $? -ne 0 || -z "${hostname}" ]]; then
+		echo "Error: Failed to retrieve hostname for VM${vmid}"
+		exit 1
+	fi
 	ciuser="$(qm cloudinit dump ${vmid} user 2> /dev/null | grep ^user: | awk '{print $NF}')"
 	echo "    - name: \"${ciuser:-admin}\"" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "      nexts: \"next-iT CoreOS Administrator\"" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "      password_hash: '${cipasswd}'" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo '      groups: [ "sudo", "docker", "adm", "wheel", "systemd-journal" ]' >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo '      ssh_authorized_keys:' >> ${COREOS_FILES_PATH}/${vmid}.yaml
-	qm cloudinit dump ${vmid} user | ${YQ} - 'ssh_authorized_keys[*]' | sed -e 's/^/        - "/' -e 's/$/"/' >> ${COREOS_FILES_PATH}/${vmid}.yaml
+	qm cloudinit dump ${vmid} user | ${YQ} read --exitStatus --printMode v --stripComments -- 'ssh_authorized_keys[*]' | sed -e 's/^/        - "/' -e 's/$/"/' >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "[done]"
 
 	echo -n "Fedora CoreOS: Generate yaml hostname block... "
-	hostname="$(qm cloudinit dump ${vmid} user | ${YQ} - 'hostname' 2> /dev/null)"
+	hostname="$(qm cloudinit dump ${vmid} user | ${YQ} read --exitStatus --printMode v --stripComments -- 'hostname' 2> /dev/null)"
 	echo -e "# network\nstorage:\n  files:" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "    - path: /etc/hostname" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "      mode: 0644" >> ${COREOS_FILES_PATH}/${vmid}.yaml
@@ -121,20 +162,48 @@ then
 	echo "      contents:" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	echo "        inline: |" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 	# Convert hostname to lowercase using bash-specific feature
-	echo -e "          ${hostname,,}\n" >> ${COREOS_FILES_PATH}/${vmid}.yaml 
-	echo "[done]"
-	
+	netcards="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- 'config[*].name' 2> /dev/null | wc -l)"
+	if [[ $? -ne 0 ]]; then
+		echo "Error: Failed to retrieve network configuration for VM${vmid}"
+		exit 1
+	fi
+	nameservers="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- "config[${netcards}].address[*]" | paste -s -d ";" -)"
+	if [[ $? -ne 0 || -z "${nameservers}" ]]; then
+		echo "Error: Failed to retrieve nameservers for VM${vmid}"
+		exit 1
+	fi
+	searchdomain="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- "config[${netcards}].search[*]" | paste -s -d ";" -)"
+	if [[ $? -ne 0 ]]; then
+		echo "Error: Failed to retrieve search domain for VM${vmid}"
+		exit 1
+	fi
 	echo -n "Fedora CoreOS: Generate yaml network block... "
-	netcards="$(qm cloudinit dump ${vmid} network | ${YQ} - 'config[*].name' 2> /dev/null | wc -l)"
-	nameservers="$(qm cloudinit dump ${vmid} network | ${YQ} - "config[${netcards}].address[*]" | paste -s -d ";" -)"
-	searchdomain="$(qm cloudinit dump ${vmid} network | ${YQ} - "config[${netcards}].search[*]" | paste -s -d ";" -)"
-	for (( i=0; i<${netcards}; i++ ))
-	do
-		ipv4="" netmask="" gw="" macaddr="" # reset on each run
-		ipv4="$(qm cloudinit dump ${vmid} network | ${YQ} - config[${i}].subnets[0].address 2> /dev/null)" || continue # dhcp
-		netmask="$(qm cloudinit dump ${vmid} network | ${YQ} - config[${i}].subnets[0].netmask 2> /dev/null)"
-		gw="$(qm cloudinit dump ${vmid} network | ${YQ} - config[${i}].subnets[0].gateway 2> /dev/null)" || true # can be empty
-		macaddr="$(qm cloudinit dump ${vmid} network | ${YQ} - config[${i}].mac_address 2> /dev/null)"
+	netcards="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- 'config[*].name' 2> /dev/null | wc -l)"
+	nameservers="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- "config[${netcards}].address[*]" | paste -s -d ";" -)"
+		ipv4="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- config[${i}].subnets[0].address 2> /dev/null)"
+		if [[ $? -ne 0 || -z "${ipv4}" ]]; then
+			echo "Error: Failed to retrieve IPv4 address for network interface ${i} of VM${vmid}"
+			continue
+		fi
+		netmask="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- config[${i}].subnets[0].netmask 2> /dev/null)"
+		if [[ $? -ne 0 || -z "${netmask}" ]]; then
+			echo "Error: Failed to retrieve netmask for VM${vmid}"
+			exit 1
+		fi
+		gw="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- config[${i}].subnets[0].gateway 2> /dev/null)"
+		if [[ $? -ne 0 ]]; then
+			echo "Error: Failed to retrieve gateway for network interface ${i} of VM${vmid}"
+			gw="" # Set gw to an empty string if retrieval fails
+		fi
+		macaddr="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- config[${i}].mac_address 2> /dev/null)"
+		if [[ $? -ne 0 || -z "${macaddr}" ]]; then
+			echo "Error: Failed to retrieve MAC address for network interface ${i} of VM${vmid}"
+			continue
+		fi
+		ipv4="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- config[${i}].subnets[0].address 2> /dev/null)" || continue # dhcp
+		netmask="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- config[${i}].subnets[0].netmask 2> /dev/null)"
+		gw="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- config[${i}].subnets[0].gateway 2> /dev/null)" || true # can be empty
+		macaddr="$(qm cloudinit dump ${vmid} network | ${YQ} read --exitStatus --printMode v --stripComments -- config[${i}].mac_address 2> /dev/null)"
 		# ipv6: TODO
 
 		echo "    - path: /etc/NetworkManager/system-connections/net${i}.nmconnection" >> ${COREOS_FILES_PATH}/${vmid}.yaml
@@ -175,11 +244,10 @@ then
 
 	# save cloudinit instanceid
 	echo "${instance_id}" > ${COREOS_FILES_PATH}/${vmid}.id
-
-	# check vm config (no args on first boot)
-	qm config ${vmid} --current | grep -q ^args || {
-		echo -n "Set args com.coreos/config on VM${vmid}... "
-		pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /dev/null || {
+		if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /dev/null; then
+			echo "[failed]"
+			exit 1
+		fi
 		pvesh set /nodes/$(hostname)/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /dev/null || {
 			echo "[failed]"
 			exit 1
