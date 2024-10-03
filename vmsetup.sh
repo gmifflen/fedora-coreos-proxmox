@@ -50,7 +50,7 @@ BASEURL=https://builds.coreos.fedoraproject.org
 # main()
 
 # pve storage exist ?
-echo -n "Check if vm storage ${TEMPLATE_VMSTORAGE} exist... "
+echo -n "Check if vm storage ${TEMPLATE_VMSTORAGE} exists... "
 pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader &> /dev/null || {
         echo -e "[failed]"
         exit 1
@@ -58,7 +58,7 @@ pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader &> /dev/null || {
 echo "[ok]"
 
 # pve storage snippet ok ?
-echo -n "Check if snippet storage ${SNIPPET_STORAGE} exist... "
+echo -n "Check if snippet storage ${SNIPPET_STORAGE} exists... "
 pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader &> /dev/null || {
         echo -e "[failed]"
         exit 1
@@ -98,7 +98,7 @@ esac
 }
 
 # create a new VM
-echo "Create fedora coreos vm ${VMID}"
+echo "Create fedora coreos vm ${TEMPLATE_VMID}"
 qm create ${TEMPLATE_VMID} --name ${TEMPLATE_NAME}
 qm set ${TEMPLATE_VMID} --memory 4096 \
 			--cpu max \
@@ -111,12 +111,12 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
 			--boot c --bootdisk scsi0
 
 template_vmcreated=$(date +%Y-%m-%d)
-qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
+qm set ${TEMPLATE_VMID} --description 'Fedora CoreOS - Template
 
  - Version             : ${VERSION}
  - Cloud-init          : true
 
-Creation date : ${template_vmcreated}"
+Creation date : ${template_vmcreated}'
 
 qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0
 
@@ -124,7 +124,7 @@ echo -e "\nCreate Cloud-init vmdisk..."
 qm set ${TEMPLATE_VMID} --ide2 ${TEMPLATE_VMSTORAGE}:cloudinit
 
 # import fedora disk
-if [[ "x${TEMPLATE_VMSTORAGE_type}" = "xfile" ]]
+if [[ "${TEMPLATE_VMSTORAGE_type}" == "file" ]]
 then
 	vmdisk_name="${TEMPLATE_VMID}/vm-${TEMPLATE_VMID}-disk-0.qcow2"
 	vmdisk_format="--format qcow2"
