@@ -119,8 +119,8 @@ chmod 755 ${snippet_storage}/snippets/hook-fcos.sh
 # storage type ? (https://pve.proxmox.com/wiki/Storage)
 echo -n "Get storage \"${TEMPLATE_VMSTORAGE}\" type... "
 case "$(pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader | grep ^type | awk '{print $2}')" in
-        dir|nfs|cifs|glusterfs|cephfs) TEMPLATE_VMSTORAGE_type="file"; echo "[file]"; ;
-        lvm|lvmthin|iscsi|iscsidirect|rbd|zfs|zfspool) TEMPLATE_VMSTORAGE_type="block"; echo "[block]"; ;
+        dir|nfs|cifs|glusterfs|cephfs) TEMPLATE_VMSTORAGE_type="file"; echo "[file]";;
+        lvm|lvmthin|iscsi|iscsidirect|rbd|zfs|zfspool) TEMPLATE_VMSTORAGE_type="block"; echo "[block]";;
         *)
                 echo "[unknown]"
                 exit 1
