@@ -106,7 +106,7 @@ echo "[ok]"
 # pve storage snippet enable
 pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader | grep -q snippets || {
         echo "You must activate content snippet on storage: ${SNIPPET_STORAGE}"
-	exit 1
+    exit 1
 }
 
 # copy files
@@ -129,7 +129,6 @@ esac
 
 [[ ! -e fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2 ]] && {
     echo "Download fedora coreos..."
-    wget -q --show-progress \
     if ! wget -q --show-progress \
         ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz; then
         echo "Failed to download Fedora CoreOS image."
