@@ -27,7 +27,7 @@ fi
 
 # Verify required commands are available
 missing_cmds=()
-for cmd in curl jq wget xz qm; do
+for cmd in curl jq wget xz qm sha256sum; do
         if ! command -v $cmd &> /dev/null; then
             missing_cmds+=($cmd)
         fi
@@ -135,6 +135,19 @@ esac
 
     if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz; then
         echo "Failed to extract Fedora CoreOS image."
+        exit 1
+    fi
+
+    echo "Download Fedora CoreOS SHA256 hash..."
+    if ! wget -q --show-progress \
+        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/x86_64/fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz.sha256; then
+        echo "Failed to download Fedora CoreOS SHA256 hash."
+        exit 1
+    fi
+
+    echo "Validate Fedora CoreOS image..."
+    if ! sha256sum -c fedora-coreos-${VERSION}-${PLATFORM}.x86_64.qcow2.xz.sha256; then
+        echo "SHA256 validation failed for Fedora CoreOS image."
         exit 1
     fi
 }
