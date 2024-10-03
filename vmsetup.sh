@@ -165,6 +165,12 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
             --tablet 0 \
             --boot c --bootdisk scsi0
 
+# Add EFI disk for UEFI
+qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,format=qcow2,efitype=4m,pre-enrolled-keys=1
+
+# Add TPM state
+qm set ${TEMPLATE_VMID} -tpmstate0 ${TEMPLATE_VMSTORAGE}:1,version=v2.0
+
 template_vmcreated=$(date +%Y-%m-%d)
 qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
  - Version             : ${VERSION}
