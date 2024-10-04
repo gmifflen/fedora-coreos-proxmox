@@ -92,7 +92,12 @@ if [[ "${phase}" == "pre-start" ]]; then
     echo "Running qm cloudinit dump ${vmid} user"
     user_output=$(qm cloudinit dump ${vmid} user)
     echo "User output: ${user_output}"
+    
+    # Debugging: Print the output of the yq command
+    echo "Running yq to retrieve password"
     cipasswd=$(echo "${user_output}" | "${YQ_PATH}" eval --exit-status -o json -- 'password' 2> /dev/null)
+    echo "yq output for password: ${cipasswd}"
+    
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to retrieve password for VM${vmid}"
         exit 1
