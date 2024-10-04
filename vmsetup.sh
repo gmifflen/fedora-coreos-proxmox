@@ -94,7 +94,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 # Fetch the SHA256 hash from the JSON data
-SHA256_HASH=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.qcow2.xz.disk.uncompressed-sha256")
+SHA256_HASH=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.qcow2.xz.disk.sha256")
 if [ -z "$SHA256_HASH" ]; then
     echo "SHA256 hash not found in the JSON data."
     exit 1
@@ -168,17 +168,20 @@ if ! coreos_image_exists; then
         echo "Failed to download Fedora CoreOS image."
         exit 1
     fi
+
+    echo "Verifying SHA256 hash..."
+    echo "${SHA256_HASH}  fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz" | sha256sum -c -
+    if [ $? -ne 0 ]; then
+        echo "SHA256 validation failed for Fedora CoreOS image."
+        rm -f fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz
+        exit 1
+    fi
+
     if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz; then
         echo "Failed to extract Fedora CoreOS image."
         exit 1
     else
         echo "Successfully extracted Fedora CoreOS image."
-    fi
-
-    if ! sha256sum -c ${SHA256_HASH}; then
-        echo "SHA256 validation failed for Fedora CoreOS image."
-        rm -f fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2
-        exit 1
     fi
 else
     echo "CoreOS image already exists. Skipping download."
