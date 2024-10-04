@@ -91,15 +91,14 @@ if ! curl -s -o /tmp/release.json $RELEASE_JSON; then
     echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
     exit 1
 fi
-FORMATS=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats | keys | .[0]")
+
+# Print the JSON data to inspect its structure
+cat /tmp/release.json
+
+# Fetch the format key
+FORMATS=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats | keys | .[0]" /tmp/release.json)
 if [ $? -ne 0 ] || [ -z "$FORMATS" ]; then
     echo "Failed to fetch the formats JSON from $RELEASE_JSON"
-    exit 1
-fi
-
-FORMATS=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats | keys | .[0]" /tmp/release.json)
-if [ $? -ne 0 ]; then
-    echo "Failed to parse the formats JSON from $RELEASE_JSON"
     exit 1
 fi
 
