@@ -74,41 +74,31 @@ find_next_available_vmid() {
 TEMPLATE_VMID=$(find_next_available_vmid)
 
 # template vm vars
-TEMPLATE_VMSTORAGE=${TEMPLATE_VMSTORAGE}
-SNIPPET_STORAGE=${SNIPPET_STORAGE}
-VMDISK_OPTIONS=${VMDISK_OPTIONS}
-TEMPLATE_IGNITION=${TEMPLATE_IGNITION:-fcos-base-tmplt.yaml}
+TEMPLATE_VMSTORAGE=${TEMPLATEVMSTORAGE}
+SNIPPET_STORAGE=${SNIPPETSTORAGE}
+VMDISK_OPTIONS=${VMDISKOPTIONS}
+TEMPLATE_IGNITION=${TEMPLATEIGNITION:-fcos-base-tmplt.yaml}
 # Default to 32G if not set
-PRIMARY_DISK_SIZE=${PRIMARY_DISK_SIZE:-32G}
+PRIMARY_DISK_SIZE=${PRIMARYDISKSIZE:-32G}
 # Default to stable, alternatively override with environment variable with either stable, testing, or next
-STREAMS=${STREAMS:-stable}
-ARCHITECTURES=${ARCHITECTURES:-x86_64}
-PLATFORM=${PLATFORM:-qemu}
-BASEURL=${BASEURL:-https://builds.coreos.fedoraproject.org}
+STREAMS=${STREAMS_V:-stable}
+ARCHITECTURES=${ARCHITECTURES_V:-x86_64}
+PLATFORM=${PLATFORM_V:-qemu}
+BASEURL=${BASE_URL:-https://builds.coreos.fedoraproject.org}
 # URL to fetch the stable release JSON
 RELEASE_JSON=${BASEURL}/streams/${STREAMS}.json
-if ! curl -s -o /tmp/release.json $RELEASE_JSON; then
+# Fetch the JSON data and extract the stable release number using jq
+VERSION=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.release")
+if [ $? -ne 0 ]; then
     echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
     exit 1
 fi
-
-# Print the JSON data to inspect its structure
-cat /tmp/release.json
-
-# Fetch the format key
-FORMATS=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats | keys | .[0]" /tmp/release.json)
-if [ $? -ne 0 ] || [ -z "$FORMATS" ]; then
-    echo "Failed to fetch the formats JSON from $RELEASE_JSON"
-    exit 1
-fi
-
 # Fetch the SHA256 hash from the JSON data
-SHA256_HASH=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.${FORMATS}.disk.uncompressed-sha256 // empty" /tmp/release.json)
+SHA256_HASH=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.qcow2.xz.disk.uncompressed-sha256")
 if [ -z "$SHA256_HASH" ]; then
     echo "SHA256 hash not found in the JSON data."
     exit 1
 fi
-
 # This section checks if all necessary environment variables are set to avoid runtime errors.
 required_vars=(TEMPLATE_VMID TEMPLATE_VMSTORAGE SNIPPET_STORAGE STREAMS TEMPLATE_NAME VMDISK_OPTIONS)
 for var in "${required_vars[@]}"; do
@@ -173,12 +163,12 @@ coreos_image_exists() {
 if ! coreos_image_exists; then
     echo "Download fedora coreos..."
     wget -q --show-progress \
-        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/${ARCHITECTURES}/fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.${FORMATS}
+        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/${ARCHITECTURES}/fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz
     if [ $? -ne 0 ]; then
         echo "Failed to download Fedora CoreOS image."
         exit 1
     fi
-    if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.${FORMATS}; then
+    if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.xz; then
         echo "Failed to extract Fedora CoreOS image."
         exit 1
     else
