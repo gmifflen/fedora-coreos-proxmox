@@ -175,7 +175,7 @@ if ! coreos_image_exists; then
         echo "Successfully extracted Fedora CoreOS image."
     fi
 
-    if ! sha256sum -c fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.sha256; then
+    if ! sha256sum -c ${SHA256_HASH}; then
         echo "SHA256 validation failed for Fedora CoreOS image."
         rm -f fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2
         exit 1
