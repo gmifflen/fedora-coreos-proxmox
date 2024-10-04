@@ -186,7 +186,7 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
             --tablet 0 \
             --boot c --bootdisk scsi0 \
             --machine q35 \
-            --bios OVMF \
+            --bios ovmf \
             --scsihw virtio-scsi-pci \
 
 qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
