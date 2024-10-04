@@ -45,12 +45,8 @@ setup_butane() {
     wget --quiet --show-progress ${DOWNLOAD_URL}/v${BUTANE_VER}/butane-${ARCH}-${OS} -O /usr/local/bin/butane
     chmod 755 /usr/local/bin/butane
 }
-    if [[ -x /usr/bin/wget ]]; then
-        download_command="wget --quiet --show-progress --output-document"
-    else
-        download_command="curl --location --output"
-    fi
-setup_yq()
+
+setup_yq() {
     [[ -x /usr/local/bin/yq ]] && return 0
     # Fetch the latest version of yq from GitHub API
     local VER=$(curl --silent "https://api.github.com/repos/mikefarah/yq/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
