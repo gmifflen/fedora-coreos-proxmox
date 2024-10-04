@@ -17,7 +17,8 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  --update-snippets          Update the hook script and template snippets and exit."
-    echo "  --help                 Display this help message and exit."
+    echo "  --help                     Display this help message and exit."
+    echo "  --update-script            Update the script from the git repository and reload."
     echo ""
     echo "This script sets up a Fedora CoreOS VM template in a Proxmox VE environment."
     echo "It checks for required commands, downloads the CoreOS image, and configures the VM."
@@ -29,8 +30,9 @@ main_menu() {
     echo "1. Run the script"
     echo "2. Update the hook script and template snippets"
     echo "3. Display help information"
-    echo "4. Exit"
-    read -p "Enter your choice [1-4]: " choice
+    echo "4. Update the script from the git repository and reload"
+    echo "5. Exit"
+    read -p "Enter your choice [1-5]: " choice
 
     case $choice in
         1)
@@ -44,6 +46,12 @@ main_menu() {
             exit 0
             ;;
         4)
+            echo "Updating the script from the git repository..."
+            git pull
+            echo "Reloading the script..."
+            exec "$0" "$@"
+            ;;
+        5)
             echo "Exiting."
             exit 0
             ;;
@@ -57,7 +65,7 @@ main_menu() {
 # Call the main menu function
 main_menu
 
-# Check for the --update-snippets flag
+# Check for the --update-snippets or --update-script flag
 for arg in "$@"; do
     case $arg in
         --update-snippets)
@@ -67,6 +75,12 @@ for arg in "$@"; do
         --help)
         show_help
         exit 0
+        ;;
+        --update-script)
+        echo "Updating the script from the git repository..."
+        git pull
+        echo "Reloading the script..."
+        exec "$0" "$@"
         ;;
     esac
 done
