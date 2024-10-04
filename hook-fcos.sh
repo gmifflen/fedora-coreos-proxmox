@@ -64,7 +64,7 @@ else
     download_command="curl --location --output"
 fi
 
-instance_id="$(qm cloudinit dump ${vmid} meta | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- 'instance-id')"
+instance_id="$(qm cloudinit dump ${vmid} meta | "${YQ_PATH}" eval --exit-status -o json -- 'instance-id')"
 if [[ $? -ne 0 || -z "${instance_id}" ]]; then
     echo "Error: Failed to retrieve instance-id for VM${vmid}"
     exit 1
@@ -83,7 +83,7 @@ if [[ "${phase}" == "pre-start" ]]; then
     }
     [[ -e ${COREOS_FILES_PATH}/${vmid}.ign ]] && exit 0 # already done
 
-    cipasswd="$(qm cloudinit dump ${vmid} user 2> /dev/null | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- 'password' 2> /dev/null)"
+    cipasswd="$(qm cloudinit dump ${vmid} user 2> /dev/null | "${YQ_PATH}" eval --exit-status -o json -- 'password' 2> /dev/null)"
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to retrieve password for VM${vmid}"
         exit 1
@@ -95,7 +95,7 @@ if [[ "${phase}" == "pre-start" ]]; then
 
     # Check if SSH keys are set
     if [[ -z "${VALIDCONFIG}" ]]; then
-        ssh_keys=$(qm cloudinit dump ${vmid} user | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- 'ssh_authorized_keys[*]')
+        ssh_keys=$(qm cloudinit dump ${vmid} user | "${YQ_PATH}" eval --exit-status -o json -- 'ssh_authorized_keys[*]')
         if [[ "x${ssh_keys}" != "x" ]]; then
             VALIDCONFIG=true
         fi
@@ -114,7 +114,7 @@ if [[ "${phase}" == "pre-start" ]]; then
     echo -n "Fedora CoreOS: Generate yaml users block... "
     echo -e "# This file is managed by next-iT hook-script. Do not edit.\n" > ${COREOS_FILES_PATH}/${vmid}.yaml
     echo -e "variant: fcos\nversion: 1.1.0" >> ${COREOS_FILES_PATH}/${vmid}.yaml
-    hostname="$(qm cloudinit dump ${vmid} user | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- 'hostname' 2> /dev/null)"
+    hostname="$(qm cloudinit dump ${vmid} user | "${YQ_PATH}" eval --exit-status -o json -- 'hostname' 2> /dev/null)"
     if [[ $? -ne 0 || -z "${hostname}" ]]; then
         echo "Error: Failed to retrieve hostname for VM${vmid}"
         exit 1
@@ -125,12 +125,12 @@ if [[ "${phase}" == "pre-start" ]]; then
     echo "      password_hash: '${cipasswd}'" >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo '      groups: [ "sudo", "docker", "adm", "wheel", "systemd-journal" ]' >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo '      ssh_authorized_keys:' >> ${COREOS_FILES_PATH}/${vmid}.yaml
-    qm cloudinit dump ${vmid} user | "${YQ}" read --exit-status --printMode v --stripComments -- 'ssh_authorized_keys[*]' | sed -e 's/^/        - "/' -e 's/$/"/' >> ${COREOS_FILES_PATH}/${vmid}.yaml
+    qm cloudinit dump ${vmid} user | "${YQ_PATH}" eval --exit-status -o json -- 'ssh_authorized_keys[*]' | sed -e 's/^/        - "/' -e 's/$/"/' >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo "[done]"
 
     echo -n "Fedora CoreOS: Generate yaml hostname block... "
-    hostname="$(qm cloudinit dump ${vmid} user | "${YQ}" read --exit-status --printMode v --stripComments -- 'hostname' 2> /dev/null)"
+    hostname="$(qm cloudinit dump ${vmid} user | "${YQ_PATH}" eval --exit-status -o json -- 'hostname' 2> /dev/null)"
     echo -e "# network\nstorage:\n  files:" >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo "    - path: /etc/hostname" >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo "      mode: 0644" >> ${COREOS_FILES_PATH}/${vmid}.yaml
@@ -138,49 +138,49 @@ if [[ "${phase}" == "pre-start" ]]; then
     echo "      contents:" >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo "        inline: |" >> ${COREOS_FILES_PATH}/${vmid}.yaml
     # Retrieve network card names
-    netcards="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- 'config[*].name' 2> /dev/null | wc -l)"
+    netcards="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- 'config[*].name' 2> /dev/null | wc -l)"
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to retrieve network configuration for VM${vmid}"
         exit 1
     fi
-    nameservers="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- "config[${netcards}].address[*]" | paste -s -d ";" -)"
+    nameservers="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- "config[${netcards}].address[*]" | paste -s -d ";" -)"
     if [[ $? -ne 0 || -z "${nameservers}" ]]; then
         echo "Error: Failed to retrieve nameservers for VM${vmid}"
         exit 1
     fi
-    searchdomain="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- "config[${netcards}].search[*]" | paste -s -d ";" -)"
+    searchdomain="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- "config[${netcards}].search[*]" | paste -s -d ";" -)"
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to retrieve search domain for VM${vmid}"
         exit 1
     fi
     echo -n "Fedora CoreOS: Generate yaml network block... "
-    netcards="$(qm cloudinit dump ${vmid} network | "${YQ}" read --exit-status --printMode v --stripComments -- 'config[*].name' 2> /dev/null | wc -l)"
-    nameservers="$(qm cloudinit dump ${vmid} network | "${YQ}" read --exit-status --printMode v --stripComments -- "config[${netcards}].address[*]" | paste -s -d ";" -)"
-    ipv4="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- config[${i}].subnets[0].address 2> /dev/null)"
+    netcards="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- 'config[*].name' 2> /dev/null | wc -l)"
+    nameservers="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- "config[${netcards}].address[*]" | paste -s -d ";" -)"
+    ipv4="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].address 2> /dev/null)"
     if [[ $? -ne 0 || -z "${ipv4}" ]]; then
         echo "Error: Failed to retrieve IPv4 address for network interface ${i} of VM${vmid}"
         continue
     fi
-    netmask="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- config[${i}].subnets[0].netmask 2> /dev/null)"
+    netmask="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].netmask 2> /dev/null)"
     if [[ $? -ne 0 || -z "${netmask}" ]]; then
         echo "Error: Failed to retrieve netmask for VM${vmid}"
         exit 1
     fi
-    gw="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- config[${i}].subnets[0].gateway 2> /dev/null)"
+    gw="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].gateway 2> /dev/null)"
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to retrieve gateway for network interface ${i} of VM${vmid}"
         gw="" # Set gw to an empty string if retrieval fails
     fi
-    macaddr="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- config[${i}].mac_address 2> /dev/null)"
+    macaddr="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].mac_address 2> /dev/null)"
     if [[ $? -ne 0 || -z "${macaddr}" ]]; then
         echo "Error: Failed to retrieve MAC address for network interface ${i} of VM${vmid}"
         continue
     fi
     for ((i=0; i<${netcards}; i++)); do
-        ipv4="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- config[${i}].subnets[0].address 2> /dev/null)" || continue # dhcp
-        netmask="$(qm cloudinit dump ${vmid} network | "${YQ}" read --exit-status --printMode v --stripComments -- config[${i}].subnets[0].netmask 2> /dev/null)"
-        gw="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" read --exit-status --printMode v --stripComments -- config[${i}].subnets[0].gateway 2> /dev/null)" || true # can be empty
-        macaddr="$(qm cloudinit dump ${vmid} network | "${YQ}" read --exit-status --printMode v --stripComments -- config[${i}].mac_address 2> /dev/null)"
+        ipv4="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].address 2> /dev/null)" || continue # dhcp
+        netmask="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].netmask 2> /dev/null)"
+        gw="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].gateway 2> /dev/null)" || true # can be empty
+        macaddr="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].mac_address 2> /dev/null)"
         # ipv6: TODO
 
     echo "    - path: /etc/NetworkManager/system-connections/net${i}.nmconnection" >> ${COREOS_FILES_PATH}/${vmid}.yaml
