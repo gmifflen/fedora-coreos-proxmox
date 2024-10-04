@@ -8,17 +8,23 @@ Fedora CoreOS template for proxmox with cloudinit support
 
 * **vmsetup.sh**
 
-```
-TEMPLATE_VMID="900"                     # Template Proxmox VMID 
-TEMPLATE_VMSTORAGE="hdd_data"           # Proxmox storage  
-SNIPPET_STORAGE="hdd_data"                 # Snippets storage for hook and ignition file
-VMDISK_OPTIONS=",discard=on"            # Add options to vmdisk
+```bash
+# Template + Storage Config
+TEMPLATE_NAME="coreos"
+TEMPLATEIGNITION="fcos-base-tmplt.yaml"
+TEMPLATEVMSTORAGE="local"               # Proxmox storage
+SNIPPETSTORAGE="local"                  # Snippets storage for hook and ignition file
+VMDISKOPTIONS=",discard=on"             # Add options to vmdisk
+STREAMS_V="stable"                      # stable, testing, next
+ARCHITECTURES_V="x86_64"                # x86_64, aarch64, ppc64le, etc.
+PLATFORM_V="qemu"                       # qemu, aws, azure, gcp, oci, openstack, packet, vmware, etc..
+BASE_URL="https://builds.coreos.fedoraproject.org"
 ```
 
 * **fcos-base-tmplt.yaml**
 
 The ignition file provided is only a working basis.
-For a more advanced configuration go to https://docs.fedoraproject.org/en-US/fedora-coreos/
+For a more advanced configuration go to <https://docs.fedoraproject.org/en-US/fedora-coreos/>
 
 it contains :
 
@@ -29,7 +35,8 @@ it contains :
 * Add motd/issue
 
 ### Script output
-```
+
+```bash
 root@vc0:/opt/fcos-tmplt# ./vmsetup.sh 
 Check if vm storage hdd_data exist... [ok]
 Check if snippet storage local exist... [ok]
@@ -71,9 +78,7 @@ Convert VM 900 in proxmox vm template... [done]
 Before starting an FCOS VM, we create an ignition file by merging the data from the cloudinit and the fcos-base-tmplt.yaml file.
 Then we modify the configuration of the vm to add the loading of the ignition file and we reset the start of the vm.
 
-<p align="center">
-  <img src="./screenshot/fcos_proxmox_first_start.png" alt="">
-</p>
+  ![fcos_proxmox_first_start](./screenshot/fcos_proxmox_first_start.png)
 
 During the first boot the vm will install qemu-agent and will restart.
 Warning, for that the network must be operational
