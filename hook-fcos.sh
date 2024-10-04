@@ -69,8 +69,9 @@ echo "Running qm cloudinit dump ${vmid} meta"
 meta_output=$(qm cloudinit dump ${vmid} meta)
 echo "Meta output: ${meta_output}"
 
-instance_id=$(echo "${meta_output}" | "${YQ_PATH}" eval --exit-status -o json -- 'instance-id')
-if [[ $? -ne 0 || -z "${instance_id}" ]]; then
+# Extract instance_id using grep and awk
+instance_id=$(echo "${meta_output}" | grep 'instance-id' | awk '{print $2}')
+if [[ -z "${instance_id}" ]]; then
     echo "Error: Failed to retrieve instance-id for VM${vmid}"
     exit 1
 fi
