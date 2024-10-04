@@ -63,14 +63,14 @@ fi
 # Function to find the next available VMID starting from 900
 find_next_available_vmid() {
     local vmid=900
-    local vmids=$(pvesh get /nodes/$(hostname)/qemu --output-format json | jq -r '.[].vmid')
+    local vmids=$(pvesh get /cluster/resources --type vm --output-format json | jq -r '.[].vmid')
     while echo "$vmids" | grep -q "^$vmid$"; do
         vmid=$((vmid + 1))
     done
     echo $vmid
 }
 
-# Set TEMPLATE_VMID to 900 or the next available VMID
+# Set TEMPLATE_VMID to the next available VMID
 TEMPLATE_VMID=$(find_next_available_vmid)
 
 # template vm vars
@@ -178,7 +178,6 @@ if ! qm create ${TEMPLATE_VMID} --name ${TEMPLATE_NAME}; then
     echo "Failed to create VM ${TEMPLATE_VMID}"
     exit 1
 fi
-qm create ${TEMPLATE_VMID} --name ${TEMPLATE_NAME}
 qm set ${TEMPLATE_VMID} --memory 4096 \
             --cpu max \
             --cores 4 \
