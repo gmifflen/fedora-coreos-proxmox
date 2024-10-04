@@ -44,18 +44,15 @@ setup_fcoreosct()
 
 setup_yq()
 {
-    # Check if yq is already installed
-    if command -v yq &> /dev/null; then
-        echo "yq is already installed"
-        return 0
-    fi
-
-    echo "Installing yq using dnf..."
-    sudo dnf install -y yq
-    if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to install yq"
-        exit 1
-    fi
+    # Fetch the latest version of yq from GitHub API
+    local VER=$(curl --silent "https://api.github.com/repos/mikefarah/yq/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    download_command=$([[ -x /usr/bin/wget ]] && echo "wget --quiet --show-progress --output-document" || echo "curl --location --output")
+    [[ -x /usr/bin/wget ]] && download_command="wget --quiet --show-progress --output-document" || download_command="curl --location --output"
+    [[ -x /usr/local/bin/yq ]] && [[ "x$(/usr/local/bin/yq --version | awk '{print $NF}')" == "x${VER}" ]] && return 0
+    echo "Setup yaml parser tools yq..."
+    rm -f /usr/local/bin/yq
+    ${download_command} /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/${VER}/yq_linux_amd64
+    chmod 755 /usr/local/bin/yq
 }
 
 setup_yq
