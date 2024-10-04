@@ -186,17 +186,6 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
             --tablet 0 \
             --boot c --bootdisk scsi0 \
             --machine q35 \
-# Add EFI disk for UEFI
-if ! qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,format=qcow2,efitype=4m,pre-enrolled-keys=1; then
-    echo "Failed to add EFI disk for UEFI."
-    exit 1
-fi
-
-# Add TPM state
-if ! qm set ${TEMPLATE_VMID} -tpmstate0 ${TEMPLATE_VMSTORAGE}:1,version=v2.0; then
-    echo "Failed to add TPM state to VM ${TEMPLATE_VMID}"
-    exit 1
-fi
 
 qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
  - Version             : ${VERSION}
@@ -229,6 +218,18 @@ if ! qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.${ARCHI
 fi
 if ! qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS}; then
     echo "Failed to configure disk for VM ${TEMPLATE_VMID}"
+    exit 1
+fi
+
+# Add EFI disk for UEFI
+if ! qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,format=qcow2,efitype=4m,pre-enrolled-keys=1; then
+    echo "Failed to add EFI disk for UEFI."
+    exit 1
+fi
+
+# Add TPM state
+if ! qm set ${TEMPLATE_VMID} -tpmstate0 ${TEMPLATE_VMSTORAGE}:1,version=v2.0; then
+    echo "Failed to add TPM state to VM ${TEMPLATE_VMID}"
     exit 1
 fi
 
