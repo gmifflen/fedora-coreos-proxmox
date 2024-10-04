@@ -62,6 +62,27 @@ main_menu() {
     esac
 }
 
+# Function to check for script updates
+check_for_updates() {
+    local current_version latest_version
+    current_version=$(git rev-parse HEAD)
+    latest_version=$(git ls-remote origin -h refs/heads/main | awk '{print $1}')
+
+    if [ "$current_version" != "$latest_version" ]; then
+        echo "================================================================================"
+        echo "                                UPDATE AVAILABLE                                "
+        echo "================================================================================"
+        echo "A new version of this script is available."
+        echo "Current version: $current_version"
+        echo "Latest version:  $latest_version"
+        echo "Please update the script by selecting the update option or manually by running: git pull"
+        echo "================================================================================"
+    fi
+}
+
+# Call the update check function
+check_for_updates
+
 # Call the main menu function
 main_menu
 
