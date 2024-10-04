@@ -14,14 +14,14 @@ YQ_PATH="/usr/local/bin/yq"
 # =====================================================================
 # functions()
 #
-setup_fcoreosct()
+setup_fcct()
 {
     local ARCH=x86_64
     local OS=unknown-linux-gnu # Linux
     local DOWNLOAD_URL=https://github.com/coreos/fcct/releases/download
 
     # Fetch the latest version from GitHub API with a timeout and error handling
-    local CT_VER=$(curl -s --max-time 10 https://api.github.com/repos/coreos/fcct/releases/latest | jq -r .tag_name | sed 's/^v//')
+    local CT_VER=$(curl -s --max-time 10 -H "User-Agent: script" https://api.github.com/repos/coreos/fcct/releases/latest | jq -r .tag_name | sed 's/^v//')
     if [[ $? -ne 0 || -z "${CT_VER}" ]]; then
         echo "Error: Failed to fetch the latest version of fcct from GitHub"
         # Check if the binary already exists and matches the latest version
@@ -47,16 +47,15 @@ setup_yq()
     # Fetch the latest version of yq from GitHub API
     local VER=$(curl --silent "https://api.github.com/repos/mikefarah/yq/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     download_command=$([[ -x /usr/bin/wget ]] && echo "wget --quiet --show-progress --output-document" || echo "curl --location --output")
-    [[ -x /usr/bin/wget ]] && download_command="wget --quiet --show-progress --output-document" || download_command="curl --location --output"
     [[ -x /usr/local/bin/yq ]] && [[ "x$(/usr/local/bin/yq --version | awk '{print $NF}')" == "x${VER}" ]] && return 0
-    echo "Setup yaml parser tools yq..."
+    [[ "x$(/usr/local/bin/yq --version | awk '{print $NF}')" == "x${VER}" ]] && return 0
     rm -f /usr/local/bin/yq
     ${download_command} /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/${VER}/yq_linux_amd64
     chmod 755 /usr/local/bin/yq
 }
 
 setup_yq
-setup_fcoreosct
+setup_fcct
 
 if [[ -x /usr/bin/wget ]]; then
     download_command="wget --quiet --show-progress --output-document"
@@ -173,6 +172,29 @@ if [[ "${phase}" == "pre-start" ]]; then
     fi
     echo -n "Fedora CoreOS: Generate yaml network block... "
     netcards="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- 'config[*].name' 2> /dev/null | wc -l)"
+    for ((i=0; i<${netcards}; i++)); do
+        ipv4="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].address 2> /dev/null)" || continue # dhcp
+        netmask="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].netmask 2> /dev/null)"
+        gw="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].gateway 2> /dev/null)" || true # can be empty
+        macaddr="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].mac_address 2> /dev/null)"
+        # ipv6: TODO
+        if [[ $? -ne 0 || -z "${ipv4}" ]]; then
+            echo "Error: Failed to retrieve IPv4 address for network interface ${i} of VM${vmid}"
+            continue
+        fi
+        if [[ $? -ne 0 || -z "${netmask}" ]]; then
+            echo "Error: Failed to retrieve netmask for VM${vmid}"
+            exit 1
+        fi
+        if [[ $? -ne 0 ]]; then
+            echo "Error: Failed to retrieve gateway for network interface ${i} of VM${vmid}"
+            gw="" # Set gw to an empty string if retrieval fails
+        fi
+        if [[ $? -ne 0 || -z "${macaddr}" ]]; then
+            echo "Error: Failed to retrieve MAC address for network interface ${i} of VM${vmid}"
+            continue
+        fi
+    done
     nameservers="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- "config[${netcards}].address[*]" | paste -s -d ";" -)"
     ipv4="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].address 2> /dev/null)"
     if [[ $? -ne 0 || -z "${ipv4}" ]]; then
@@ -194,12 +216,6 @@ if [[ "${phase}" == "pre-start" ]]; then
         echo "Error: Failed to retrieve MAC address for network interface ${i} of VM${vmid}"
         continue
     fi
-    for ((i=0; i<${netcards}; i++)); do
-        ipv4="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].address 2> /dev/null)" || continue # dhcp
-        netmask="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].netmask 2> /dev/null)"
-        gw="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].subnets[0].gateway 2> /dev/null)" || true # can be empty
-        macaddr="$(qm cloudinit dump ${vmid} network | "${YQ_PATH}" eval --exit-status -o json -- config[${i}].mac_address 2> /dev/null)"
-        # ipv6: TODO
 
     echo "    - path: /etc/NetworkManager/system-connections/net${i}.nmconnection" >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo "      mode: 0600" >> ${COREOS_FILES_PATH}/${vmid}.yaml
