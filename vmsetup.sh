@@ -11,13 +11,62 @@ set -e
 export LANG=C
 export LC_ALL=C
 
-# Check for the --update-hook flag
-UPDATE_HOOK_ONLY=false
+# Function to display help information
+show_help() {
+    echo "Usage: vmsetup.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --update-snippets          Update the hook script and template snippets and exit."
+    echo "  --help                 Display this help message and exit."
+    echo ""
+    echo "This script sets up a Fedora CoreOS VM template in a Proxmox VE environment."
+    echo "It checks for required commands, downloads the CoreOS image, and configures the VM."
+}
+
+# Function to display the main menu
+main_menu() {
+    echo "Select an option:"
+    echo "1. Run the script"
+    echo "2. Update the hook script and template snippets"
+    echo "3. Display help information"
+    echo "4. Exit"
+    read -p "Enter your choice [1-4]: " choice
+
+    case $choice in
+        1)
+            echo "Running the script..."
+            ;;
+        2)
+            UPDATE_SNIPPETS_ONLY=true
+            ;;
+        3)
+            show_help
+            exit 0
+            ;;
+        4)
+            echo "Exiting."
+            exit 0
+            ;;
+        *)
+            echo "Invalid choice. Exiting."
+            exit 1
+            ;;
+    esac
+}
+
+# Call the main menu function
+main_menu
+
+# Check for the --update-snippets flag
 for arg in "$@"; do
     case $arg in
-        --update-hook)
-        UPDATE_HOOK_ONLY=true
+        --update-snippets)
+        UPDATE_SNIPPETS_ONLY=true
         shift
+        ;;
+        --help)
+        show_help
+        exit 0
         ;;
     esac
 done
@@ -141,8 +190,8 @@ cp -av ${TEMPLATE_IGNITION} hook-fcos.sh ${snippet_storage}/snippets
 sed -e "/^COREOS_TMPLT/ c\COREOS_TMPLT=${snippet_storage}/snippets/${TEMPLATE_IGNITION}" -i ${snippet_storage}/snippets/hook-fcos.sh
 chmod 755 ${snippet_storage}/snippets/hook-fcos.sh
 
-# Exit if only updating the hook script
-if [ "$UPDATE_HOOK_ONLY" = true ]; then
+# Exit if only updating the snippets
+if [ "$UPDATE_SNIPPETS_ONLY" = true ]; then
     echo "Hook script updated. Exiting."
     exit 0
 fi
