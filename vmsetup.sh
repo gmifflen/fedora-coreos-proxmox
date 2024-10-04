@@ -11,6 +11,17 @@ set -e
 export LANG=C
 export LC_ALL=C
 
+# Check for the --update-hook flag
+UPDATE_HOOK_ONLY=false
+for arg in "$@"; do
+    case $arg in
+        --update-hook)
+        UPDATE_HOOK_ONLY=true
+        shift
+        ;;
+    esac
+done
+
 # Source the template.conf file
 if [ -f template.conf ]; then
     source template.conf
@@ -129,6 +140,12 @@ snippet_storage="$(pvesh get /storage/${SNIPPET_STORAGE} --output-format json | 
 cp -av ${TEMPLATE_IGNITION} hook-fcos.sh ${snippet_storage}/snippets
 sed -e "/^COREOS_TMPLT/ c\COREOS_TMPLT=${snippet_storage}/snippets/${TEMPLATE_IGNITION}" -i ${snippet_storage}/snippets/hook-fcos.sh
 chmod 755 ${snippet_storage}/snippets/hook-fcos.sh
+
+# Exit if only updating the hook script
+if [ "$UPDATE_HOOK_ONLY" = true ]; then
+    echo "Hook script updated. Exiting."
+    exit 0
+fi
 
 # storage type ? (https://pve.proxmox.com/wiki/Storage)
 echo -n "Get storage \"${TEMPLATE_VMSTORAGE}\" type... "
