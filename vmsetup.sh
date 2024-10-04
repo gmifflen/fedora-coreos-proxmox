@@ -78,8 +78,6 @@ TEMPLATE_VMSTORAGE=${TEMPLATEVMSTORAGE}
 SNIPPET_STORAGE=${SNIPPETSTORAGE}
 VMDISK_OPTIONS=${VMDISKOPTIONS}
 TEMPLATE_IGNITION=${TEMPLATEIGNITION:-fcos-base-tmplt.yaml}
-# Default to 32G if not set
-PRIMARY_DISK_SIZE=${PRIMARYDISKSIZE:-32G}
 # Default to stable, alternatively override with environment variable with either stable, testing, or next
 STREAMS=${STREAMS_V:-stable}
 ARCHITECTURES=${ARCHITECTURES_V:-x86_64}
@@ -187,6 +185,7 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
             --ostype l26 \
             --tablet 0 \
             --boot c --bootdisk scsi0 \
+            --machine q35 \
 # Add EFI disk for UEFI
 if ! qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,format=qcow2,efitype=4m,pre-enrolled-keys=1; then
     echo "Failed to add EFI disk for UEFI."
@@ -228,7 +227,7 @@ if ! qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.${ARCHI
     echo "Failed to import Fedora CoreOS disk."
     exit 1
 fi
-if ! qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS},size=${PRIMARY_DISK_SIZE}; then
+if ! qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS}; then
     echo "Failed to configure disk for VM ${TEMPLATE_VMID}"
     exit 1
 fi
