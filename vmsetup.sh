@@ -104,7 +104,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Fetch the SHA256 hash from the JSON data
-SHA256_HASH=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.${FORMATS}.disk.uncompressed-sha256 // empty")
+SHA256_HASH=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats.${FORMATS}.disk.uncompressed-sha256 // empty" /tmp/release.json)
 if [ -z "$SHA256_HASH" ]; then
     echo "SHA256 hash not found in the JSON data."
     exit 1
