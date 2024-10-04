@@ -36,7 +36,7 @@ for cmd in \
     sha256sum; do
         if ! command -v $cmd &> /dev/null; then
             missing_cmds+=($cmd)
-        read -p "Do you want to install the missing commands? (y/n) " choice
+        fi
 done
 
 # Check if there are any missing commands and prompt the user to install them
@@ -96,13 +96,11 @@ if [ $? -ne 0 ] || [ -z "$FORMATS" ]; then
     echo "Failed to fetch the formats JSON from $RELEASE_JSON"
     exit 1
 fi
-fi
 
 FORMATS=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats | keys | .[0]" /tmp/release.json)
 if [ $? -ne 0 ]; then
     echo "Failed to parse the formats JSON from $RELEASE_JSON"
     exit 1
-fi
 fi
 
 # Fetch the SHA256 hash from the JSON data
@@ -133,8 +131,6 @@ pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader &> /dev/null || {
 echo "[ok]"
 
 # pve storage snippet ok ?
-echo -n "Check if snippet storage ${SNIPPET_STORAGE} exists... "
-pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader &> /dev/null || {
 echo -n "Check if snippet storage ${SNIPPET_STORAGE} exists... "
 if ! snippet_storage_info=$(pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader 2>/dev/null); then
     echo -e "[failed]"
@@ -189,18 +185,16 @@ if ! coreos_image_exists; then
     else
         echo "Successfully extracted Fedora CoreOS image."
     fi
-    fi
 
     if ! sha256sum -c fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.sha256; then
         echo "SHA256 validation failed for Fedora CoreOS image."
         rm -f fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2
         exit 1
     fi
-        exit 1
-    fi
 else
     echo "CoreOS image already exists. Skipping download."
 fi
+
 # create a new VM
 echo "Create fedora coreos vm ${TEMPLATE_VMID}"
 if ! qm create ${TEMPLATE_VMID} --name ${TEMPLATE_NAME}; then
@@ -229,33 +223,33 @@ if ! qm set ${TEMPLATE_VMID} -tpmstate0 ${TEMPLATE_VMSTORAGE}:1,version=v2.0; th
     exit 1
 fi
 
-# Add TPM state
-qm set ${TEMPLATE_VMID} -tpmstate0 ${TEMPLATE_VMSTORAGE}:1,version=v2.0
-
 template_vmcreated=$(date +%Y-%m-%d)
 qm set ${TEMPLATE_VMID} --description <<EOF
 Fedora CoreOS - Template
  - Version             : ${VERSION}
  - Cloud-init          : true
+EOF
+
 if ! qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0; then
     echo "Failed to add network interface to VM ${TEMPLATE_VMID}."
     exit 1
 fi
-EOF
+
 echo -e "\nCreate Cloud-init vmdisk..."
 if ! qm set ${TEMPLATE_VMID} --ide2 ${TEMPLATE_VMSTORAGE}:cloudinit; then
     echo "Failed to add Cloud-init disk to VM ${TEMPLATE_VMID}"
     exit 1
 fi
 
-echo -e "\nCreate Cloud-init vmdisk..."
-qm set ${TEMPLATE_VMID} --ide2 ${TEMPLATE_VMSTORAGE}:cloudinit
-
 # Import Fedora CoreOS disk
 if [[ "${TEMPLATE_VMSTORAGE_type}" == "file" ]]; then
         vmdisk_name="${TEMPLATE_VMID}/vm-${TEMPLATE_VMID}-disk-0.qcow2"
         vmdisk_format="--format qcow2"
 else
+        vmdisk_name="vm-${TEMPLATE_VMID}-disk-0"
+        vmdisk_format=""
+fi
+
 if ! qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}; then
     echo "Failed to import Fedora CoreOS disk."
     exit 1
@@ -264,7 +258,7 @@ if ! qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORA
     echo "Failed to configure disk for VM ${TEMPLATE_VMID}"
     exit 1
 fi
-fi
+
 # set hook-script
 if ! qm set ${TEMPLATE_VMID} --hookscript ${SNIPPET_STORAGE}:snippets/hook-fcos.sh; then
     echo "Failed to set hook script for VM ${TEMPLATE_VMID}."
@@ -278,7 +272,4 @@ if ! qm template ${TEMPLATE_VMID}; then
     exit 1
 else
     echo "[done]"
-fiiled]"
-    exit 1
 fi
-echo "[done]"
