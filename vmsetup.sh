@@ -199,12 +199,10 @@ if ! qm set ${TEMPLATE_VMID} -tpmstate0 ${TEMPLATE_VMSTORAGE}:1,version=v2.0; th
     exit 1
 fi
 
-template_vmcreated=$(date +%Y-%m-%d)
-qm set ${TEMPLATE_VMID} --description <<EOF
-Fedora CoreOS - Template
+qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
  - Version             : ${VERSION}
  - Cloud-init          : true
-EOF
+ - Creation date       : ${template_vmcreated}"
 
 if ! qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0; then
     echo "Failed to add network interface to VM ${TEMPLATE_VMID}."
