@@ -186,6 +186,7 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
             --tablet 0 \
             --boot c --bootdisk scsi0 \
             --machine q35 \
+            --scsihw virtio-scsi-pci \
 
 qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
  - Version             : ${VERSION}
@@ -222,7 +223,7 @@ if ! qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORA
 fi
 
 # Add EFI disk for UEFI
-if ! qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,format=qcow2,efitype=4m,pre-enrolled-keys=1; then
+if ! qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,efitype=4m,pre-enrolled-keys=1; then
     echo "Failed to add EFI disk for UEFI."
     exit 1
 fi
