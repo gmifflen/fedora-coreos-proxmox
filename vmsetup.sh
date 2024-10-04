@@ -7,7 +7,7 @@ set -e
 # =============================================================================================
 # global vars
 
-# force english messages
+# Force English messages
 export LANG=C
 export LC_ALL=C
 
@@ -27,10 +27,16 @@ fi
 
 # Verify required commands are available
 missing_cmds=()
-for cmd in curl jq wget xz qm sha256sum; do
+for cmd in \
+    curl \
+    jq \
+    wget \
+    xz \
+    qm \
+    sha256sum; do
         if ! command -v $cmd &> /dev/null; then
             missing_cmds+=($cmd)
-        fi
+        read -p "Do you want to install the missing commands? (y/n) " choice
 done
 
 # Check if there are any missing commands and prompt the user to install them
@@ -57,7 +63,8 @@ fi
 # Function to find the next available VMID starting from 900
 find_next_available_vmid() {
     local vmid=900
-    while pvesh get /nodes/$(hostname)/qemu | grep -q "\"vmid\": $vmid"; do
+    local vmids=$(pvesh get /nodes/$(hostname)/qemu --output-format json | jq -r '.[].vmid')
+    while echo "$vmids" | grep -q "^$vmid$"; do
         vmid=$((vmid + 1))
     done
     echo $vmid
@@ -75,21 +82,27 @@ TEMPLATE_IGNITION=${TEMPLATE_IGNITION:-fcos-base-tmplt.yaml}
 PRIMARY_DISK_SIZE=${PRIMARY_DISK_SIZE:-32G}
 # Default to stable, alternatively override with environment variable with either stable, testing, or next
 STREAMS=${STREAMS:-stable}
-ARCHITECTURES=${ARCHITECTURES:-${ARCHITECTURES}}
+ARCHITECTURES=${ARCHITECTURES:-x86_64}
 PLATFORM=${PLATFORM:-qemu}
 BASEURL=${BASEURL:-https://builds.coreos.fedoraproject.org}
 # URL to fetch the stable release JSON
 RELEASE_JSON=${BASEURL}/streams/${STREAMS}.json
-# Fetch the JSON data and extract the stable release number using jq
-VERSION=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.release")
-if [ $? -ne 0 ]; then
+if ! curl -s -o /tmp/release.json $RELEASE_JSON; then
     echo "Failed to fetch the stable release JSON from $RELEASE_JSON"
     exit 1
 fi
 FORMATS=$(curl -s $RELEASE_JSON | jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats | keys | .[0]")
-if [ $? -ne 0 ]; then
+if [ $? -ne 0 ] || [ -z "$FORMATS" ]; then
     echo "Failed to fetch the formats JSON from $RELEASE_JSON"
     exit 1
+fi
+fi
+
+FORMATS=$(jq -r ".architectures.${ARCHITECTURES}.artifacts.${PLATFORM}.formats | keys | .[0]" /tmp/release.json)
+if [ $? -ne 0 ]; then
+    echo "Failed to parse the formats JSON from $RELEASE_JSON"
+    exit 1
+fi
 fi
 
 # Fetch the SHA256 hash from the JSON data
@@ -122,12 +135,12 @@ echo "[ok]"
 # pve storage snippet ok ?
 echo -n "Check if snippet storage ${SNIPPET_STORAGE} exists... "
 pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader &> /dev/null || {
-        echo -e "[failed]"
-        exit 1
-}
+echo -n "Check if snippet storage ${SNIPPET_STORAGE} exists... "
+if ! snippet_storage_info=$(pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader 2>/dev/null); then
+    echo -e "[failed]"
+    exit 1
+fi
 echo "[ok]"
-
-# pve storage snippet enable
 pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader | grep -q snippets || {
         echo "You must activate content snippet on storage: ${SNIPPET_STORAGE}"
     exit 1
@@ -135,7 +148,7 @@ pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader | grep -q snippets |
 
 # copy files
 echo "Copy hook-script and ignition config to snippet storage..."
-snippet_storage="$(pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader | grep ^path | awk '{print $NF}')"
+snippet_storage="$(pvesh get /storage/${SNIPPET_STORAGE} --output-format json | jq -r '.path')"
 cp -av ${TEMPLATE_IGNITION} hook-fcos.sh ${snippet_storage}/snippets
 sed -e "/^COREOS_TMPLT/ c\COREOS_TMPLT=${snippet_storage}/snippets/${TEMPLATE_IGNITION}" -i ${snippet_storage}/snippets/hook-fcos.sh
 chmod 755 ${snippet_storage}/snippets/hook-fcos.sh
@@ -143,11 +156,17 @@ chmod 755 ${snippet_storage}/snippets/hook-fcos.sh
 # storage type ? (https://pve.proxmox.com/wiki/Storage)
 echo -n "Get storage \"${TEMPLATE_VMSTORAGE}\" type... "
 case "$(pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader | grep ^type | awk '{print $2}')" in
-        dir|nfs|cifs|glusterfs|cephfs) TEMPLATE_VMSTORAGE_type="file"; echo "[file]";;
-        lvm|lvmthin|iscsi|iscsidirect|rbd|zfs|zfspool) TEMPLATE_VMSTORAGE_type="block"; echo "[block]";;
-        *)
-                echo "[unknown]"
-                exit 1
+    dir|nfs|cifs|glusterfs|cephfs)
+        TEMPLATE_VMSTORAGE_type="file"
+        echo "[file]"
+        ;;
+    lvm|lvmthin|iscsi|iscsidirect|rbd|zfs|zfspool)
+        TEMPLATE_VMSTORAGE_type="block"
+        echo "[block]"
+        ;;
+    *)
+        echo "[unknown]"
+        exit 1
         ;;
 esac
 
@@ -158,29 +177,36 @@ coreos_image_exists() {
 
 if ! coreos_image_exists; then
     echo "Download fedora coreos..."
-    if ! wget -q --show-progress \
-        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/${ARCHITECTURES}/fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.${FORMATS}; then
+    wget -q --show-progress \
+        ${BASEURL}/prod/streams/${STREAMS}/builds/${VERSION}/${ARCHITECTURES}/fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.${FORMATS}
+    if [ $? -ne 0 ]; then
         echo "Failed to download Fedora CoreOS image."
         exit 1
     fi
-
     if ! xz -dv fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.${FORMATS}; then
         echo "Failed to extract Fedora CoreOS image."
         exit 1
+    else
+        echo "Successfully extracted Fedora CoreOS image."
+    fi
     fi
 
-    echo "Validate Fedora CoreOS image..."
-    echo "${SHA256_HASH}  fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2" > fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.sha256
     if ! sha256sum -c fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2.sha256; then
         echo "SHA256 validation failed for Fedora CoreOS image."
+        rm -f fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2
+        exit 1
+    fi
         exit 1
     fi
 else
     echo "CoreOS image already exists. Skipping download."
 fi
-
 # create a new VM
 echo "Create fedora coreos vm ${TEMPLATE_VMID}"
+if ! qm create ${TEMPLATE_VMID} --name ${TEMPLATE_NAME}; then
+    echo "Failed to create VM ${TEMPLATE_VMID}"
+    exit 1
+fi
 qm create ${TEMPLATE_VMID} --name ${TEMPLATE_NAME}
 qm set ${TEMPLATE_VMID} --memory 4096 \
             --cpu max \
@@ -191,22 +217,36 @@ qm set ${TEMPLATE_VMID} --memory 4096 \
             --ostype l26 \
             --tablet 0 \
             --boot c --bootdisk scsi0 \
-            --bios ovmf \
-            --machine q35
-
 # Add EFI disk for UEFI
-qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,format=qcow2,efitype=4m,pre-enrolled-keys=1
+if ! qm set ${TEMPLATE_VMID} -efidisk0 ${TEMPLATE_VMSTORAGE}:1,format=qcow2,efitype=4m,pre-enrolled-keys=1; then
+    echo "Failed to add EFI disk for UEFI."
+    exit 1
+fi
+
+# Add TPM state
+if ! qm set ${TEMPLATE_VMID} -tpmstate0 ${TEMPLATE_VMSTORAGE}:1,version=v2.0; then
+    echo "Failed to add TPM state to VM ${TEMPLATE_VMID}"
+    exit 1
+fi
 
 # Add TPM state
 qm set ${TEMPLATE_VMID} -tpmstate0 ${TEMPLATE_VMSTORAGE}:1,version=v2.0
 
 template_vmcreated=$(date +%Y-%m-%d)
-qm set ${TEMPLATE_VMID} --description "Fedora CoreOS - Template
+qm set ${TEMPLATE_VMID} --description <<EOF
+Fedora CoreOS - Template
  - Version             : ${VERSION}
  - Cloud-init          : true
- - Creation date       : ${template_vmcreated}"
-
-qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0
+if ! qm set ${TEMPLATE_VMID} --net0 virtio,bridge=vmbr0; then
+    echo "Failed to add network interface to VM ${TEMPLATE_VMID}."
+    exit 1
+fi
+EOF
+echo -e "\nCreate Cloud-init vmdisk..."
+if ! qm set ${TEMPLATE_VMID} --ide2 ${TEMPLATE_VMSTORAGE}:cloudinit; then
+    echo "Failed to add Cloud-init disk to VM ${TEMPLATE_VMID}"
+    exit 1
+fi
 
 echo -e "\nCreate Cloud-init vmdisk..."
 qm set ${TEMPLATE_VMID} --ide2 ${TEMPLATE_VMSTORAGE}:cloudinit
@@ -216,19 +256,29 @@ if [[ "${TEMPLATE_VMSTORAGE_type}" == "file" ]]; then
         vmdisk_name="${TEMPLATE_VMID}/vm-${TEMPLATE_VMID}-disk-0.qcow2"
         vmdisk_format="--format qcow2"
 else
-        vmdisk_name="vm-${TEMPLATE_VMID}-disk-0"
-        vmdisk_format=""
+if ! qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}; then
+    echo "Failed to import Fedora CoreOS disk."
+    exit 1
 fi
-qm importdisk ${TEMPLATE_VMID} fedora-coreos-${VERSION}-${PLATFORM}.${ARCHITECTURES}.qcow2 ${TEMPLATE_VMSTORAGE} ${vmdisk_format}
-qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS},size=${PRIMARY_DISK_SIZE}
-
+if ! qm set ${TEMPLATE_VMID} --scsihw virtio-scsi-pci --scsi0 ${TEMPLATE_VMSTORAGE}:${vmdisk_name}${VMDISK_OPTIONS},size=${PRIMARY_DISK_SIZE}; then
+    echo "Failed to configure disk for VM ${TEMPLATE_VMID}"
+    exit 1
+fi
+fi
 # set hook-script
-qm set ${TEMPLATE_VMID} --hookscript ${SNIPPET_STORAGE}:snippets/hook-fcos.sh
+if ! qm set ${TEMPLATE_VMID} --hookscript ${SNIPPET_STORAGE}:snippets/hook-fcos.sh; then
+    echo "Failed to set hook script for VM ${TEMPLATE_VMID}."
+    exit 1
+fi
 
 # convert vm template
 echo -n "Convert VM ${TEMPLATE_VMID} in proxmox vm template... "
-if ! qm template ${TEMPLATE_VMID} &> /dev/null; then
+if ! qm template ${TEMPLATE_VMID}; then
     echo "[failed]"
+    exit 1
+else
+    echo "[done]"
+fiiled]"
     exit 1
 fi
 echo "[done]"
