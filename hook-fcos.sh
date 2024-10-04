@@ -14,32 +14,31 @@ YQ_PATH="/usr/local/bin/yq"
 # =====================================================================
 # functions()
 #
-setup_fcct()
-{
+setup_butane() {
     local ARCH=x86_64
     local OS=unknown-linux-gnu # Linux
-    local DOWNLOAD_URL=https://github.com/coreos/fcct/releases/download
+    local DOWNLOAD_URL=https://github.com/coreos/butane/releases/download
 
     # Fetch the latest version from GitHub API with a timeout and error handling
-    local CT_VER=$(curl -s --max-time 10 -H "User-Agent: script" https://api.github.com/repos/coreos/fcct/releases/latest | jq -r .tag_name | sed 's/^v//')
-    if [[ $? -ne 0 || -z "${CT_VER}" ]]; then
-        echo "Error: Failed to fetch the latest version of fcct from GitHub"
+    local BUTANE_VER=$(curl -s --max-time 10 -H "User-Agent: script" https://api.github.com/repos/coreos/butane/releases/latest | jq -r .tag_name | sed 's/^v//')
+    if [[ $? -ne 0 || -z "${BUTANE_VER}" ]]; then
+        echo "Error: Failed to fetch the latest version of Butane from GitHub"
         # Check if the binary already exists and matches the latest version
-        if [[ -x /usr/local/bin/fcos-ct ]]; then
-            current_version=$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')
-            if [[ "x${current_version}" == "x${CT_VER}" ]]; then
+        if [[ -x /usr/local/bin/butane ]]; then
+            current_version=$(/usr/local/bin/butane --version | awk '{print $NF}')
+            if [[ "x${current_version}" == "x${BUTANE_VER}" ]]; then
                 return 0
             fi
         fi
     fi
 
     # Check if the binary already exists and matches the latest version
-    [[ -x /usr/local/bin/fcos-ct ]] && [[ "x$(/usr/local/bin/fcos-ct --version | awk '{print $NF}')" == "x${CT_VER}" ]] && return 0
+    [[ -x /usr/local/bin/butane ]] && [[ "x$(/usr/local/bin/butane --version | awk '{print $NF}')" == "x${BUTANE_VER}" ]] && return 0
 
-    echo "Setup Fedora CoreOS config transpiler..."
-    rm -f /usr/local/bin/fcos-ct
-    wget --quiet --show-progress ${DOWNLOAD_URL}/v${CT_VER}/fcct-${ARCH}-${OS} -O /usr/local/bin/fcos-ct
-    chmod 755 /usr/local/bin/fcos-ct
+    echo "Setup Butane..."
+    rm -f /usr/local/bin/butane
+    wget --quiet --show-progress ${DOWNLOAD_URL}/v${BUTANE_VER}/butane-${ARCH}-${OS} -O /usr/local/bin/butane
+    chmod 755 /usr/local/bin/butane
 }
 
 setup_yq()
@@ -55,7 +54,7 @@ setup_yq()
 }
 
 setup_yq
-setup_fcct
+setup_butane
 
 if [[ -x /usr/bin/wget ]]; then
     download_command="wget --quiet --show-progress --output-document"
@@ -244,7 +243,7 @@ if [[ "${phase}" == "pre-start" ]]; then
     }
 
     echo -n "Fedora CoreOS: Generate ignition config... "
-    /usr/local/bin/fcos-ct  --pretty --strict \
+    /usr/local/bin/butane  --pretty --strict \
                 --output ${COREOS_FILES_PATH}/${vmid}.ign \
                 ${COREOS_FILES_PATH}/${vmid}.yaml 2> /dev/null
     [[ $? -eq 0 ]] || {
