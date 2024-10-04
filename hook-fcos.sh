@@ -89,9 +89,16 @@ if [[ "${phase}" == "pre-start" ]]; then
     }
     [[ -e ${COREOS_FILES_PATH}/${vmid}.ign ]] && exit 0 # already done
 
-    cipasswd="$(qm cloudinit dump ${vmid} user 2> /dev/null | "${YQ_PATH}" eval --exit-status -o json -- 'password' 2> /dev/null)"
+    echo "Running qm cloudinit dump ${vmid} user"
+    user_output=$(qm cloudinit dump ${vmid} user)
+    echo "User output: ${user_output}"
+    cipasswd=$(echo "${user_output}" | "${YQ_PATH}" eval --exit-status -o json -- 'password' 2> /dev/null)
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to retrieve password for VM${vmid}"
+        exit 1
+    fi
+    if [[ -z "${cipasswd}" ]]; then
+        echo "Error: Password is empty for VM${vmid}"
         exit 1
     fi
     # Check if password is set
