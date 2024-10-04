@@ -22,6 +22,7 @@ show_help() {
     echo ""
     echo "This script sets up a Fedora CoreOS VM template in a Proxmox VE environment."
     echo "It checks for required commands, downloads the CoreOS image, and configures the VM."
+    exec "$0" "$@"
 }
 
 # Function to display the main menu
@@ -225,10 +226,10 @@ cp -av ${TEMPLATE_IGNITION} hook-fcos.sh ${snippet_storage}/snippets
 sed -e "/^COREOS_TMPLT/ c\COREOS_TMPLT=${snippet_storage}/snippets/${TEMPLATE_IGNITION}" -i ${snippet_storage}/snippets/hook-fcos.sh
 chmod 755 ${snippet_storage}/snippets/hook-fcos.sh
 
-# Exit if only updating the snippets
+# Reload script after updating snippets
 if [ "$UPDATE_SNIPPETS_ONLY" = true ]; then
-    echo "Hook script updated. Exiting."
-    exit 0
+    echo "Hook script and Template snippets updated. Reloading Script."
+    exec "$0" "$@"
 fi
 
 # storage type ? (https://pve.proxmox.com/wiki/Storage)
