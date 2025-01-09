@@ -168,7 +168,7 @@ wait_for_pvesh_set() {
         # If we get here, it's a different error
         rm -f /tmp/pvesh.error
         return 1
-    fi
+    done
     
     rm -f /tmp/pvesh.error
     return 1
