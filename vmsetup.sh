@@ -78,7 +78,7 @@ check_for_updates() {
 
     if [ -z "$latest_version" ]; then
         print_warn "Unable to determine latest version from remote"
-    }
+    fi
     
 
     if [ "$current_version" != "$latest_version" ]; then
