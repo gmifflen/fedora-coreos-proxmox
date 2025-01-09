@@ -133,12 +133,12 @@ validate_config() {
     
     if [[ ! -f "${config_file}" ]]; then
         error_exit "Config file ${config_file} not found"
-    }
+    fi
     
     # Validate YAML syntax
     if ! "${YQ_PATH}" eval '.' "${config_file}" >/dev/null 2>&1; then
         error_exit "Invalid YAML syntax in ${config_file}"
-    }
+    fi
 }
 
 # Initialize temp files array
