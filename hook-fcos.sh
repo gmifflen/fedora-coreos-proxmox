@@ -152,7 +152,7 @@ wait_for_pvesh_set() {
     
     while [[ $attempt -le $max_attempts ]]; do
         print_debug "Attempting pvesh set (attempt $attempt/$max_attempts)"
-        if pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /tmp/pvesh.error; then
+        if pvesh set /nodes/$(hostname)/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /tmp/pvesh.error; then
             rm -f /tmp/pvesh.error
             return 0
         fi
