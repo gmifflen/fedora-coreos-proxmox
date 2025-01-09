@@ -376,6 +376,8 @@ if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt
 fi
 rm -f /tmp/pvesh.error
 
+touch /var/lock/qemu-server/lock-${vmid}.conf
+
 # Restart VM
 print_info "\nNOTICE: New Fedora CoreOS ignition settings generated. Restarting VM..."
 if ! qm stop ${vmid}; then
