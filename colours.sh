@@ -1,5 +1,5 @@
-# colors.sh
 #!/bin/bash
+
 # ANSI color codes
 export COLOR_RED='\033[0;31m'
 export COLOR_GREEN='\033[0;32m'
