@@ -30,7 +30,6 @@ phase="$2"
 COREOS_TEMPLATE=/opt/fcos-tmplt.yaml
 COREOS_FILES_PATH=/etc/pve/next-pve/coreos
 YQ_PATH="/usr/local/bin/yq"
-LOCK_FILE="/var/lock/coreos-hook-${vmid}.lock"
 
 mkdir -p "${COREOS_FILES_PATH}"
 
@@ -55,7 +54,6 @@ error_exit() {
 }
 
 cleanup() {
-    rm -f "${LOCK_FILE}"
     for file in "${TEMP_FILES[@]}"; do
         rm -f "${file}"
     done
@@ -147,17 +145,25 @@ validate_config() {
     fi
 }
 
+wait_for_lock() {
+    local lockfile="/var/lock/qemu-server/lock-${vmid}.conf"
+    local max_attempts=30
+    local attempt=1
+    local sleep_time=2
+
+    while [[ $attempt -le $max_attempts ]]; do
+        if [[ ! -f "$lockfile" ]]; then
+            return 0
+        fi
+        print_info "Waiting for lock to be released (attempt $attempt/$max_attempts)..."
+        sleep $sleep_time
+        ((attempt++))
+    done
+    return 1
+}
+
 # Initialize temp files array
 TEMP_FILES=()
-
-# Check for existing lock
-if [ -e "${LOCK_FILE}" ] && kill -0 $(cat "${LOCK_FILE}") 2>/dev/null; then
-    print_error "Script is already running"
-    exit 1
-fi
-
-# Create lock file
-echo $$ > "${LOCK_FILE}"
 
 # Set up trap for cleanup
 trap cleanup EXIT
@@ -365,6 +371,19 @@ print_info "Generating ignition configuration"
 }
 print_success "[done]"
 
+if ! mkdir -p "$(dirname /var/lock/qemu-server/lock-${vmid}.conf)"; then
+    error_exit "Failed to create lock directory"
+fi
+
+touch /var/lock/qemu-server/lock-${vmid}.conf
+if [[ $? -ne 0 ]]; then
+    error_exit "Failed to create lock file"
+fi
+
+if ! wait_for_lock; then
+    error_exit "Timed out waiting for lock to be released"
+fi
+
 # Save the cloud-init instance ID to a file for future reference.
 # This ensures that the instance ID is preserved across reboots and can be used to detect changes.
 print_debug "Setting VM configuration with ignition file: ${COREOS_FILES_PATH}/${vmid}.ign"
@@ -375,8 +394,6 @@ if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt
     error_exit "Failed to set VM configuration using pvesh for VM${vmid}. Error: ${error_output}"
 fi
 rm -f /tmp/pvesh.error
-
-touch /var/lock/qemu-server/lock-${vmid}.conf
 
 # Restart VM
 print_info "\nNOTICE: New Fedora CoreOS ignition settings generated. Restarting VM..."
