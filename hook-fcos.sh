@@ -21,11 +21,21 @@ export COLOUR_INFO="${COLOUR_CYAN}"
 export COLOUR_DEBUG="${COLOUR_MAGENTA}"
 
 # output functions
-print_ok() {echo -e "${COLOUR_OK}[OK]${COLOUR_RESET} $1"}
-print_error() {echo -e "${COLOUR_ERROR}[ERROR]${COLOUR_RESET} $1" >&2}
-print_warn() {echo -e "${COLOUR_WARN}[WARN]${COLOUR_RESET} $1"}
-print_info() {echo -e "${COLOUR_INFO}[INFO]${COLOUR_RESET} $1"}
-print_debug() {echo -e "${COLOUR_DEBUG}[DEBUG]${COLOUR_RESET} $1"}
+print_ok() {
+    echo -e "${COLOUR_OK}[OK]${COLOUR_RESET} $1"
+}
+print_error() {
+    echo -e "${COLOUR_ERROR}[ERROR]${COLOUR_RESET} $1" >&2
+}
+print_warn() {
+    echo -e "${COLOUR_WARN}[WARN]${COLOUR_RESET} $1"
+}
+print_info() {
+    echo -e "${COLOUR_INFO}[INFO]${COLOUR_RESET} $1"
+}
+print_debug() {
+    echo -e "${COLOUR_DEBUG}[DEBUG]${COLOUR_RESET} $1"
+}
  
 vmid="$1"
 phase="$2"
