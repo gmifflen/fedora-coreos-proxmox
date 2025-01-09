@@ -69,17 +69,24 @@ main_menu() {
 check_for_updates() {
     local current_version latest_version
     current_version=$(git rev-parse HEAD)
-    latest_version=$(git ls-remote origin -h refs/heads/main | awk '{print $1}')
+    for branch in "main", "master"; do
+      latest_version=$(git ls-remote origin -h "refs/heads/${branch}" 2>/dev/null | awk '{print $1}')
+      if [ -n "$latest_version" ]; then
+        break
+      fi
+    done
+
+    if [ -z "$latest_version" ]; then
+        print_warn "Unable to determine latest version from remote"
+    }
+    
 
     if [ "$current_version" != "$latest_version" ]; then
-        print_header "================================================================================"
-        print_header "                                UPDATE AVAILABLE                                "
-        print_header "================================================================================"
+        print_header "UPDATE AVAILABLE"
         print_warn "A new version of this script is available."
         echo -e "${COLOR_CYAN}Current version:${COLOR_RESET} $current_version"
         echo -e "${COLOR_CYAN}Latest version:${COLOR_RESET}  $latest_version"
         print_info "Please update the script by selecting the update option or manually by running: git pull"
-        print_header "================================================================================"
     fi
 }
 
