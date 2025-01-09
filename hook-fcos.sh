@@ -3,38 +3,21 @@
 # set -e is commented out to allow the script to continue even if some commands fail
 #set -e
 
-# ANSI color codes
-export COLOUR_RED='\033[0;31m'
-export COLOUR_GREEN='\033[0;32m'
-export COLOUR_YELLOW='\033[1;33m'
-export COLOUR_BLUE='\033[0;34m'
-export COLOUR_MAGENTA='\033[0;35m'
-export COLOUR_CYAN='\033[0;36m'
-export COLOUR_WHITE='\033[1;37m'
-export COLOUR_RESET='\033[0m'
-
-# status colours
-export COLOUR_OK="${COLOUR_GREEN}"
-export COLOUR_WARN="${COLOUR_YELLOW}"
-export COLOUR_ERROR="${COLOUR_RED}"
-export COLOUR_INFO="${COLOUR_CYAN}"
-export COLOUR_DEBUG="${COLOUR_MAGENTA}"
-
 # output functions
 print_ok() {
-    echo -e "${COLOUR_OK}[OK]${COLOUR_RESET} $1"
+    echo -e "[OK] $1"
 }
 print_error() {
-    echo -e "${COLOUR_ERROR}[ERROR]${COLOUR_RESET} $1" >&2
+    echo -e "[ERROR] $1" >&2
 }
 print_warn() {
-    echo -e "${COLOUR_WARN}[WARN]${COLOUR_RESET} $1"
+    echo -e "[WARN] $1"
 }
 print_info() {
-    echo -e "${COLOUR_INFO}[INFO]${COLOUR_RESET} $1"
+    echo -e "[INFO] $1"
 }
 print_debug() {
-    echo -e "${COLOUR_DEBUG}[DEBUG]${COLOUR_RESET} $1"
+    echo -e "[DEBUG] $1"
 }
  
 vmid="$1"
