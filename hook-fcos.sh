@@ -145,35 +145,6 @@ validate_config() {
     fi
 }
 
-wait_for_pvesh_set() {
-    local max_attempts=30
-    local attempt=1
-    local sleep_time=2
-    
-    while [[ $attempt -le $max_attempts ]]; do
-        print_debug "Attempting pvesh set (attempt $attempt/$max_attempts)"
-        if pvesh set /nodes/$(hostname)/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /tmp/pvesh.error; then
-            rm -f /tmp/pvesh.error
-            return 0
-        fi
-        
-        error_output=$(cat /tmp/pvesh.error)
-        if [[ "$error_output" == *"trying to acquire lock"* ]] || [[ "$error_output" == *"can't lock file"* ]]; then
-            print_info "Waiting for pvesh lock to be released (attempt $attempt/$max_attempts)..."
-            sleep $sleep_time
-            ((attempt++))
-            continue
-        fi
-        
-        # If we get here, it's a different error
-        rm -f /tmp/pvesh.error
-        return 1
-    done
-    
-    rm -f /tmp/pvesh.error
-    return 1
-}
-
 # Initialize temp files array
 TEMP_FILES=()
 
@@ -394,7 +365,7 @@ touch /var/lock/qemu-server/lock-${vmid}.conf
 print_debug "Setting VM configuration with ignition file: ${COREOS_FILES_PATH}/${vmid}.ign"
 echo "${instance_id}" > ${COREOS_FILES_PATH}/${vmid}.id
 
-if ! wait_for_pvesh_set; then
+if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /tmp/pvesh.error; then
     error_output=$(cat /tmp/pvesh.error 2>/dev/null)
     [[ -f /tmp/pvesh.error ]] && rm -f /tmp/pvesh.error
     error_exit "Failed to set VM configuration using pvesh for VM${vmid}. Error: ${error_output}"
