@@ -19,6 +19,9 @@ print_info() {
 print_debug() {
     echo -e "[DEBUG] $1"
 }
+print_success() {
+    echo -e "[SUCCESS] $1"
+}
  
 vmid="$1"
 phase="$2"
@@ -28,6 +31,16 @@ COREOS_TEMPLATE=/opt/fcos-tmplt.yaml
 COREOS_FILES_PATH=/etc/pve/next-pve/coreos
 YQ_PATH="/usr/local/bin/yq"
 LOCK_FILE="/var/lock/coreos-hook-${vmid}.lock"
+
+mkdir -p "${COREOS_FILES_PATH}"
+
+if ! mkdir -p "${COREOS_FILES_PATH}"; then
+    error_exit "Failed to create directory: ${COREOS_FILES_PATH}"
+fi
+
+if [[ ! -w "${COREOS_FILES_PATH}" ]]; then
+    error_exit "Cannot write to directory: ${COREOS_FILES_PATH}"
+fi
 
 # =====================================================================
 # functions()
@@ -69,7 +82,7 @@ setup_butane() {
     local DOWNLOAD_URL=https://github.com/coreos/butane/releases/download
 
     # Fetch the latest version from GitHub API with a timeout and error handling
-    local BUTANE_VER=$(curl -s --max-time 10 -H "User-Agent: script" https://api.github.com/repos/coreos/butane/releases/latest | yq -r .tag_name | sed 's/^v//')
+    local BUTANE_VER=$(curl -s --max-time 10 -H "User-Agent: script" https://api.github.com/repos/coreos/butane/releases/latest | grep '"tag_name":' | sed 's/^v//')
     if [[ $? -ne 0 || -z "${BUTANE_VER}" ]]; then
         print_error "Failed to fetch the latest version of Butane from GitHub"
         # Check if the binary already exists and matches the latest version
@@ -81,34 +94,44 @@ setup_butane() {
         fi
     fi
 
-    # Check if the binary already exists and matches the latest version
-    if [[ -x /usr/local/bin/butane ]]; then
-        current_version=$(/usr/local/bin/butane --version | awk '{print $NF}')
-        if [[ "x${current_version}" == "x${BUTANE_VER}" ]]; then
-            return 0
-        fi
+    print_info "Setting up Butane..."
+    if [[ -z "${BUTANE_VER}" ]]; then
+        BUTANE_VER="0.23.0"  # Fallback version if unable to fetch latest
     fi
 
-    print_info "Setting up Butane..."
+    local BUTANE_URL="${DOWNLOAD_URL}/${BUTANE_VER}/butane-${ARCH}-${OS}"
     rm -f /usr/local/bin/butane
-    download_command=$([[ -x /usr/bin/wget ]] && echo "wget --quiet --show-progress --output-document" || echo "curl --location --output")
-    ${download_command} ${DOWNLOAD_URL}/v${BUTANE_VER}/butane-${ARCH}-${OS} -O /usr/local/bin/butane
+    if [[ -x /usr/bin/wget ]]; then
+        wget --quiet --show-progress "${BUTANE_URL}" -O /usr/local/bin/butane
+    else
+        curl --location "${BUTANE_URL}" -o /usr/local/bin/butane
+    fi
     chmod 755 /usr/local/bin/butane
 }
 
 setup_yq() {
-    [[ -x /usr/local/bin/yq ]] && return 0
+    if [[ -x "${YQ_PATH}" ]]; then
+        return 0
+    fi
+
+    print_info "Setting up yq..."
+    # Create directory if it doesn't exist
+    mkdir -p "$(dirname "${YQ_PATH}")"
     
     # Fetch the latest version of yq from GitHub API
     local VER=$(curl -s --max-time 10 "https://api.github.com/repos/mikefarah/yq/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    download_command=$([[ -x /usr/bin/wget ]] && echo "wget --quiet --show-progress --output-document" || echo "curl --location --output")
-    
-    [[ -x /usr/local/bin/yq ]] && [[ "x$(/usr/local/bin/yq --version | awk '{print $NF}')" == "x${VER}" ]] && return 0
+    if [[ -z "${VER}" ]]; then
+        VER="v4.44.6"  # Fallback version if unable to fetch latest
+    fi
 
-    print_info "Setting up yq..."
-    rm -f /usr/local/bin/yq
-    ${download_command} /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/${VER}/yq_linux_amd64
-    chmod 755 /usr/local/bin/yq
+    local YQ_URL="https://github.com/mikefarah/yq/releases/download/${VER}/yq_linux_amd64"
+    if [[ -x /usr/bin/wget ]]; then
+        wget --quiet --show-progress "${YQ_URL}" -O "${YQ_PATH}"
+    else
+        curl --location "${YQ_URL}" -o "${YQ_PATH}"
+    fi
+
+    chmod 755 "${YQ_PATH}"
 }
 
 validate_config() {
