@@ -217,7 +217,7 @@ pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader &> /dev/null || {
 print_ok "[ok]"
 
 # pve storage snippet ok ?
-print_info -n "Check if snippet storage ${SNIPPET_STORAGE} exists... "
+print_info "Check if snippet storage ${SNIPPET_STORAGE} exists... "
 if ! snippet_storage_info=$(pvesh get /storage/${SNIPPET_STORAGE} --noborder --noheader 2>/dev/null); then
     echo -e "[failed]"
     exit 1
@@ -243,7 +243,7 @@ if [ "$UPDATE_SNIPPETS_ONLY" = true ]; then
 fi
 
 # storage type ? (https://pve.proxmox.com/wiki/Storage)
-print_info -n "Get storage \"${TEMPLATE_VMSTORAGE}\" type... "
+print_info "Get storage \"${TEMPLATE_VMSTORAGE}\" type... "
 case "$(pvesh get /storage/${TEMPLATE_VMSTORAGE} --noborder --noheader | grep ^type | awk '{print $2}')" in
     dir|nfs|cifs|glusterfs|cephfs)
         TEMPLATE_VMSTORAGE_type="file"
