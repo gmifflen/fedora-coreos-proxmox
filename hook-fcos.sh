@@ -354,6 +354,9 @@ print_info "Generating ignition configuration"
 }
 print_success "[done]"
 
+sync
+sleep 1
+
 if ! mkdir -p "$(dirname /var/lock/qemu-server/lock-${vmid}.conf)"; then
     error_exit "Failed to create lock directory"
 fi
