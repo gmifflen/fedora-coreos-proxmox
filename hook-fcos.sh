@@ -113,7 +113,7 @@ if [[ $? -ne 0 ]]; then
 fi
 echo "User output: ${user_output}"
     
-cipasswd=$(echo "${user_output}" | "${YQ_PATH}" eval --exit-status -o json -- 'password' 2> /dev/null)
+cipasswd=$(echo "${user_output}" | "${YQ_PATH}" eval --exit-status -o json -- '.password' 2> /dev/null)
 if [[ $? -ne 0 ]]; then
     echo "Error: Failed to retrieve password for VM${vmid}"
     exit 1
