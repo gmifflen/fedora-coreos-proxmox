@@ -365,7 +365,33 @@ touch /var/lock/qemu-server/lock-${vmid}.conf
 print_debug "Setting VM configuration with ignition file: ${COREOS_FILES_PATH}/${vmid}.ign"
 echo "${instance_id}" > ${COREOS_FILES_PATH}/${vmid}.id
 
-if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /tmp/pvesh.error; then
+print_debug "Constructed pvesh command: pvesh set /nodes/$(hostname)/qemu/${vmid}/config --args \"-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign\""
+
+if [[ ! -f "${COREOS_FILES_PATH}/${vmid}.ign" ]]; then
+    error_exit "Ignition file ${COREOS_FILES_PATH}/${vmid}.ign does not exist"
+fi
+
+if [[ ! -r "${COREOS_FILES_PATH}/${vmid}.ign" ]]; then
+    error_exit "Ignition file ${COREOS_FILES_PATH}/${vmid}.ign is not readable"
+fi
+
+filesize=$(stat -f%z "${COREOS_FILES_PATH}/${vmid}.ign" 2>/dev/null || stat -c%s "${COREOS_FILES_PATH}/${vmid}.ign" 2>/dev/null)
+print_debug "Ignition file size: ${filesize} bytes"
+
+print_debug "File permissions:"
+ls -l "${COREOS_FILES_PATH}/${vmid}.ign"
+print_debug "Directory permissions:"
+ls -ld "${COREOS_FILES_PATH}"
+print_debug "Current user and groups:"
+id
+
+print_debug "Current VM configuration:"
+pvesh get "/nodes/$(hostname)/qemu/${vmid}/config" 2>&1 || print_warn "Failed to get current config"
+
+print_debug "Current -fw_cfg setting:"
+pvesh get "/nodes/$(hostname)/qemu/${vmid}/config" | grep fw_cfg || print_debug "No existing fw_cfg setting found"
+
+if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" --verbose 2> /tmp/pvesh.error; then
     error_output=$(cat /tmp/pvesh.error 2>/dev/null)
     [[ -f /tmp/pvesh.error ]] && rm -f /tmp/pvesh.error
     error_exit "Failed to set VM configuration using pvesh for VM${vmid}. Error: ${error_output}"
