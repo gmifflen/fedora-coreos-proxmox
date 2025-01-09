@@ -10,4 +10,4 @@ if [ $? -ne 0 ]; then
 fi
 
 # Print the stable release number
-echo "Current stable release number: $RELEASE_JSON"
+echo "Current stable release number: $VERSION"
