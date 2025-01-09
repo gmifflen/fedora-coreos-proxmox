@@ -1,3 +1,5 @@
+# colors.sh
+#!/bin/bash
 # ANSI color codes
 export COLOR_RED='\033[0;31m'
 export COLOR_GREEN='\033[0;32m'
@@ -8,14 +10,14 @@ export COLOR_CYAN='\033[0;36m'
 export COLOR_WHITE='\033[1;37m'
 export COLOR_RESET='\033[0m'
 
-# status colors
+# Status colors
 export COLOR_OK="${COLOR_GREEN}"
 export COLOR_WARN="${COLOR_YELLOW}"
 export COLOR_ERROR="${COLOR_RED}"
 export COLOR_INFO="${COLOR_CYAN}"
 export COLOR_DEBUG="${COLOR_MAGENTA}"
 
-# output functions
+# Colorized output functions
 print_ok() {
     echo -e "${COLOR_OK}[OK]${COLOR_RESET} $1"
 }
