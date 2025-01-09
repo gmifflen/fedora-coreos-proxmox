@@ -145,20 +145,32 @@ validate_config() {
     fi
 }
 
-wait_for_lock() {
-    local lockfile="/var/lock/qemu-server/lock-${vmid}.conf"
+wait_for_pvesh_set() {
     local max_attempts=30
     local attempt=1
     local sleep_time=2
-
+    
     while [[ $attempt -le $max_attempts ]]; do
-        if [[ ! -f "$lockfile" ]]; then
+        print_debug "Attempting pvesh set (attempt $attempt/$max_attempts)"
+        if pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /tmp/pvesh.error; then
+            rm -f /tmp/pvesh.error
             return 0
         fi
-        print_info "Waiting for lock to be released (attempt $attempt/$max_attempts)..."
-        sleep $sleep_time
-        ((attempt++))
-    done
+        
+        error_output=$(cat /tmp/pvesh.error)
+        if [[ "$error_output" == *"trying to acquire lock"* ]] || [[ "$error_output" == *"can't lock file"* ]]; then
+            print_info "Waiting for pvesh lock to be released (attempt $attempt/$max_attempts)..."
+            sleep $sleep_time
+            ((attempt++))
+            continue
+        fi
+        
+        # If we get here, it's a different error
+        rm -f /tmp/pvesh.error
+        return 1
+    fi
+    
+    rm -f /tmp/pvesh.error
     return 1
 }
 
@@ -376,21 +388,15 @@ if ! mkdir -p "$(dirname /var/lock/qemu-server/lock-${vmid}.conf)"; then
 fi
 
 touch /var/lock/qemu-server/lock-${vmid}.conf
-if [[ $? -ne 0 ]]; then
-    error_exit "Failed to create lock file"
-fi
-
-if ! wait_for_lock; then
-    error_exit "Timed out waiting for lock to be released"
-fi
 
 # Save the cloud-init instance ID to a file for future reference.
 # This ensures that the instance ID is preserved across reboots and can be used to detect changes.
 print_debug "Setting VM configuration with ignition file: ${COREOS_FILES_PATH}/${vmid}.ign"
 echo "${instance_id}" > ${COREOS_FILES_PATH}/${vmid}.id
-if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /tmp/pvesh.error; then
-    error_output=$(cat /tmp/pvesh.error)
-    rm -f /tmp/pvesh.error
+
+if ! wait_for_pvesh_set; then
+    error_output=$(cat /tmp/pvesh.error 2>/dev/null)
+    [[ -f /tmp/pvesh.error ]] && rm -f /tmp/pvesh.error
     error_exit "Failed to set VM configuration using pvesh for VM${vmid}. Error: ${error_output}"
 fi
 rm -f /tmp/pvesh.error
