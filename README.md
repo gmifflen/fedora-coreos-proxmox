@@ -2,6 +2,16 @@
 
 Scripts and configuration files to create a Fedora CoreOS template in Proxmox with CloudInit support
 
+## Prereqs
+
+- curl
+- wget
+- jq
+- xz-utils
+- openssl
+- git
+- genisoimage
+
 ## Quick Start
 
 1. Clone the repository:
