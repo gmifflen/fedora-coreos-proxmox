@@ -284,21 +284,41 @@ print_success "[done]"
 print_info "Generating network configuration"
 echo -e "# network\nstorage:\n  files:" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 
+# Get network configuration
 network_output=$(qm cloudinit dump ${vmid} network)
-netcards=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- '.config[]?.name // []' 2> /dev/null | wc -l)
 if [[ $? -ne 0 ]]; then
-    error_exit "Failed to retrieve network configuration for VM${vmid}"
+    error_exit "Failed to get network configuration dump"
 fi
 
-nameservers="$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- "config[${netcards}].address[]? // []" | paste -s -d ";" -)"
-searchdomain="$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- "config[${netcards}].search[]? // []" | paste -s -d ";" -)"
+print_debug "Network output: ${network_output}"
+
+# Get nameservers and search domains from the nameserver config
+nameservers=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- '.config[] | select(.type == "nameserver") | .address[]? // []' 2> /dev/null | paste -s -d ";" -)
+if [[ $? -ne 0 ]]; then
+    print_warn "Failed to retrieve nameservers, using empty value"
+    nameservers=""
+fi
+
+searchdomain=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- '.config[] | select(.type == "nameserver") | .search[]? // []' 2> /dev/null | paste -s -d ";" -)
+if [[ $? -ne 0 ]]; then
+    print_warn "Failed to retrieve search domains, using empty value"
+    searchdomain=""
+fi
+
+# Get network interfaces configuration
+# First get count of physical interfaces (excluding nameserver entries)
+netcards=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- '.config[] | select(.type != "nameserver") | .[] // []' 2> /dev/null | wc -l)
+if [[ $? -ne 0 ]]; then
+    print_warn "No network interfaces found"
+    netcards=0
+fi
 
 # Process each network interface
 for ((i=0; i<${netcards}; i++)); do
-    ipv4=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json ".config[${i}].subnets[0].address // \"\"" 2> /dev/null) || continue # dhcp
-    netmask=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json ".config[${i}].subnets[0].netmask // \"\"" 2> /dev/null)
-    gw=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json ".config[${i}].subnets[0].gateway // \"\"" 2> /dev/null) || true # can be empty
-    macaddr=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json ".config[${i}].mac_address // \"\"" 2> /dev/null)
+    ipv4=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- ".config[] | select(.type != \"nameserver\") | .[${i}].subnets[0].address // \"\"" 2> /dev/null) || continue # dhcp
+    netmask=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- ".config[] | select(.type != \"nameserver\") | .[${i}].subnets[0].netmask // \"\"" 2> /dev/null)
+    gw=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- ".config[] | select(.type != \"nameserver\") | .[${i}].subnets[0].gateway // \"\"" 2> /dev/null) || true # can be empty
+    macaddr=$(echo "${network_output}" | "${YQ_PATH}" eval --exit-status -o json -- ".config[] | select(.type != \"nameserver\") | .[${i}].mac_address // \"\"" 2> /dev/null)
 
    if [[ -z "${ipv4}" || -z "${netmask}" || -z "${macaddr}" ]]; then
         print_warn "Skipping network interface ${i} due to missing configuration"
@@ -326,6 +346,7 @@ for ((i=0; i<${netcards}; i++)); do
     echo "          dns=${nameservers}" >> ${COREOS_FILES_PATH}/${vmid}.yaml
     echo -e "          dns-search=${searchdomain}\n" >> ${COREOS_FILES_PATH}/${vmid}.yaml
 done
+
 print_success "[done]"
 
 # Add template if it exists
@@ -346,10 +367,14 @@ print_success "[done]"
 
 # Save the cloud-init instance ID to a file for future reference.
 # This ensures that the instance ID is preserved across reboots and can be used to detect changes.
+print_debug "Setting VM configuration with ignition file: ${COREOS_FILES_PATH}/${vmid}.ign"
 echo "${instance_id}" > ${COREOS_FILES_PATH}/${vmid}.id
-if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /dev/null; then
-    error_exit "Failed to set VM configuration using pvesh for VM${vmid}"
+if ! pvesh set /nodes/"$(hostname)"/qemu/${vmid}/config --args "-fw_cfg name=opt/com.coreos/config,file=${COREOS_FILES_PATH}/${vmid}.ign" 2> /tmp/pvesh.error; then
+    error_output=$(cat /tmp/pvesh.error)
+    rm -f /tmp/pvesh.error
+    error_exit "Failed to set VM configuration using pvesh for VM${vmid}. Error: ${error_output}"
 fi
+rm -f /tmp/pvesh.error
 
 # Restart VM
 print_info "\nNOTICE: New Fedora CoreOS ignition settings generated. Restarting VM..."
