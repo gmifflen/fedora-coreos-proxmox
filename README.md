@@ -4,6 +4,7 @@ Scripts and configuration files to create a Fedora CoreOS template in Proxmox wi
 
 ## Prereqs
 
+- snippets enabled in Proxmox
 - curl
 - wget
 - jq
